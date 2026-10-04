@@ -18,7 +18,7 @@ Songs live together in one logical collection. Playlists, groups, tags, and save
 | API | Go with Gin | Authentication, catalog operations, imports, synchronization, and playback endpoints |
 | Catalog and configuration | PostgreSQL | User library, track metadata, playlists, tags, groups, jobs, and sync state |
 | Canonical audio storage | Per-user datalake backed by object storage | Stores each imported audio file once |
-| Background work | Go workers; yt-dlp and FFmpeg tools | URL inspection, downloads, audio processing, and import jobs |
+| Background work | Go workers | Resumable imports, metadata extraction, and sync coordination |
 
 PostgreSQL stores records about media, not the large audio bytes. A `media_assets` row refers to an object in the datalake. This preserves one canonical audio copy per imported asset while keeping database backups and queries focused on catalog data.
 
@@ -32,9 +32,8 @@ flowchart LR
     API --> Lake["Per-user cloud datalake"]
     Local["Selected local files or folder"] --> Import["Import pipeline"]
     Drive["Selected Google Drive files"] --> Import
-    URL["Submitted URL or playlist"] --> Jobs["Persistent download jobs"]
-    Jobs --> Worker["Download and processing worker"]
-    Worker --> Import
+    Import --> Jobs["Persistent import jobs"]
+    Jobs --> Worker["Metadata and sync worker"]
     Import --> Lake
     Import --> PG
     Client --> Sync["Sync selected songs to device"]
@@ -69,10 +68,6 @@ After login on a new device, the app loads the user's catalog and organization. 
 
 Organization and audio have separate sync behavior: catalog changes are small configuration updates; syncing music transfers audio bytes. Do not show a track as available offline until its complete file has been downloaded and verified.
 
-### Download from a URL
-
-The user submits a supported URL or playlist. The API creates a durable job and returns its ID. A worker inspects the source, downloads entries into temporary staging, processes the audio, and stores completed assets in the same datalake used by local and Drive imports. The job updates progress and reports partial failures. Retrying a job must not duplicate entries that already completed.
-
 ## Data model
 
 | Entity | Purpose |
@@ -86,7 +81,7 @@ The user submits a supported URL or playlist. The API creates a durable job and 
 | `playlist_items` | Ordered membership of tracks in manual playlists |
 | `groups` | User-defined hierarchy for organizing playlists and views |
 | `tags` and `track_tags` | Reusable labels and their track memberships |
-| `import_jobs` | Durable local, Drive, and URL import progress and errors |
+| `import_jobs` | Durable local and Drive import progress and errors |
 | `device_sync` | Per-device sync selections, completed assets, and catalog cursor |
 | `change_log` | Ordered catalog changes for incremental sync and recovery |
 
@@ -110,7 +105,7 @@ Use the narrowest OAuth scopes that support the chosen picker flow. The `drive.f
 
 ## Authentication and security
 
-Require authenticated API access for catalog and media endpoints. Enforce user ownership in every database query and object-storage operation; knowing a track or object ID must not grant access. Keep OAuth refresh tokens encrypted and out of logs. Use short-lived signed upload or download grants where appropriate, validate URL jobs, limit worker resources, and record import and sync failures without logging private file contents.
+Require authenticated API access for catalog and media endpoints. Enforce user ownership in every database query and object-storage operation; knowing a track or object ID must not grant access. Keep OAuth refresh tokens encrypted and out of logs. Use short-lived signed upload or download grants where appropriate, limit worker resources, and record import and sync failures without logging private file contents.
 
 ## Repository and service shape
 
@@ -128,9 +123,8 @@ Deploy the API, PostgreSQL, object storage, and workers as separate operational 
 | 3. Organization | Playlists, ordering, groups, tags, saved filters, portable configuration export | One song appears in multiple contexts without duplicating audio |
 | 4. Device sync | Device registration, selected playlist/song downloads, local index, offline playback | A synced song plays with network disabled |
 | 5. Google Drive import | OAuth, picker, metadata, content transfer, retry behavior | Selected Drive files import and play after Drive is disconnected |
-| 6. URL download jobs | Playlist inspection, durable queue, worker, progress, retries | Partial failures can resume without duplicate tracks |
-| 7. Capacitor mobile | Native file selection, background playback, lock-screen controls | Playback continues across app backgrounding and device lock |
-| 8. Multi-device changes | Incremental catalog sync, change log, conflict handling | Playlist and tag changes converge across devices predictably |
+| 6. Capacitor mobile | Native file selection, background playback, lock-screen controls | Playback continues across app backgrounding and device lock |
+| 7. Multi-device changes | Incremental catalog sync, change log, conflict handling | Playlist and tag changes converge across devices predictably |
 
 ## Key decisions and risks
 
@@ -138,11 +132,10 @@ Deploy the API, PostgreSQL, object storage, and workers as separate operational 
 - **Imports copy; they do not mirror.** Source changes do not silently overwrite a user's library copy. Add re-import behavior as an explicit feature.
 - **Audio sync and configuration sync are different.** Users can sync organization without downloading every song, and can choose which files to cache offline.
 - **Mobile playback needs native work.** Capacitor shares much of the UI, while background playback and device media controls need platform integrations.
-- **Downloads require policy review.** yt-dlp is a tool, not authorization to download a particular source. YouTube's terms restrict downloading except where authorized; Apple also restricts apps that enable third-party media downloads without explicit authorization. Check source terms and distribution requirements before enabling or publishing that feature. [YouTube terms](https://www.youtube.com/static?template=terms), [Apple App Review guideline 5.2.3](https://developer.apple.com/app-store/review/guidelines/#intellectual-property).
 
 ## Initial scope recommendation
 
-Start with login, one local-folder import path, the canonical object-storage datalake, PostgreSQL catalog records, playlist and tag organization, and reliable online playback. Then add device sync and offline playback before Google Drive and URL-download integrations. This validates the core promise—one organized library that can be copied to a new device—before adding more import sources.
+Start with login, one local-folder import path, the canonical object-storage datalake, PostgreSQL catalog records, playlist and tag organization, and reliable online playback. Then add device sync and offline playback before Google Drive import. This validates the core promise—one organized library that can be copied to a new device—before adding another import origin.
 
 ## References
 
@@ -152,6 +145,3 @@ Start with login, one local-folder import path, the canonical object-storage dat
 - [Google Drive API scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)
 - [Google Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
 - [PostgreSQL storage and TOAST](https://www.postgresql.org/docs/current/storage-toast.html)
-- [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp)
-- [YouTube Terms of Service](https://www.youtube.com/static?template=terms)
-- [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
