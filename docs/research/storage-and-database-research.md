@@ -4,9 +4,11 @@
 **Last updated:** 2026-10-03  
 **Scope:** compare database and audio-storage choices for Song Sleeve without changing the existing implementation plan.
 
+**Historical snapshot (2026-10-03):** this comparison predates the current local-first, optional-cloud rules. Its streaming, deduplication and provider recommendations are superseded by the [implementation plan](../implementation-plan.html#stack-review) and [2026-10-07 stack review](reports/Music%20app%20stack%20review.html). The original research body is retained for comparison.
+
 ## Recommendation
 
-Keep **PostgreSQL for the catalog and organization**, and store audio bytes in a separate **object storage service**. The application has relational data—users, tracks, playlist membership, tags, groups, and sync state—while the songs are large immutable objects. Treating those as separate workloads lets each scale and be billed independently.
+Keep **PostgreSQL for the catalog and organization**, and store audio bytes in a separate **object storage service**. The application has relational data—users, tracks, playlist membership, artists, groups, and sync state—while the songs are large immutable objects. Treating those as separate workloads lets each scale and be billed independently.
 
 PostgreSQL is still a good fit. The potentially expensive part is the growing media library and the bandwidth used to stream and sync it, not the playlist rows. Putting music bytes in PostgreSQL would make database disk, backups, replication, and restores grow with every song.
 
@@ -28,16 +30,16 @@ Keep these costs separate in metrics. A library with millions of tracks can stil
 
 | Option | Fit for Song Sleeve | Resource and scale profile | Assessment |
 | --- | --- | --- | --- |
-| PostgreSQL | Strong fit for users, playlists, tags, groups, filters, and sync records | Start with one managed primary; scale compute and disk, then add read replicas or partitioning when measurements justify it | Recommended database engine |
+| PostgreSQL | Strong fit for users, artists, manual playlists/groups, display preferences, and sync records | Start with one managed primary; scale compute and disk, then add read replicas or partitioning when measurements justify it | Recommended database engine |
 | Managed serverless PostgreSQL, such as Neon | Same PostgreSQL model with usage-based compute, autoscaling, and scale-to-zero | Can reduce idle compute cost; resuming after idle adds startup latency, and active connections prevent idling | Strong early-stage hosting candidate if connection pooling and wake behavior are acceptable |
 | Supabase Postgres | Same PostgreSQL engine with integrated auth, storage, APIs, and realtime features | Predictable paid-plan floor and included usage; additional compute and bandwidth are billed separately | Convenient bundle, but much of the platform overlaps with a Gin API |
 | AWS RDS for PostgreSQL | Standard managed PostgreSQL with AWS regional deployment choices | Always provisioned compute gives a predictable baseline; Multi-AZ and replicas add resilience and cost | Good when AWS operations and São Paulo locality are priorities |
 | MySQL | Can support the core relational model | Similar operational footprint and scaling approach to PostgreSQL | Technically viable, but no clear cost or resource advantage for this schema |
-| MongoDB | Flexible documents for user settings or denormalized views | Can scale document reads and writes, but overlapping playlists, tags, groups, and smart filters require more duplicated data or application joins | No compelling reason to choose it for the source-of-truth catalog |
+| MongoDB | Flexible documents for user settings or denormalized views | Can scale document reads and writes, but overlapping playlists, artist assignments, and group-playlist memberships require more duplicated data or application joins | No compelling reason to choose it for the source-of-truth catalog |
 | DynamoDB | Strong key-based access at high scale | Usage-based and horizontally scalable, but each new query shape needs planned keys and indexes | Consider only if measured access patterns become stable and key-centric |
 | Cloudflare D1 / SQLite database service | Useful for small edge or local data | D1 currently limits a database to 10 GB on paid plans and an individual BLOB or row to 2 MB | Not suitable for the primary catalog plus songs; local SQLite remains useful on each device |
 
-PostgreSQL supports the access pattern directly: a user has many tracks; playlists and tracks have a many-to-many relationship; each track may have tags and several media versions; smart playlists filter and sort combinations of those fields. That flexibility matters more here than raw key-value throughput.
+PostgreSQL supports the access pattern directly: a user has many tracks; each track has at most one explicitly assigned artist; manual playlists contain tracks through ordered memberships; groups contain playlists through ordered memberships. A track has one current content reference. The user creates and changes those relationships; groups cannot contain groups. These relational links matter more here than raw key-value throughput.
 
 **Neon** and **Supabase** are PostgreSQL hosting choices, not replacements for the PostgreSQL data model. Neon documents compute that can scale to zero after five minutes idle, with a small wake-up delay; this works best when the application uses a pool and does not hold an always-on database connection. [Neon compute lifecycle](https://neon.com/docs/manage/endpoints/), [Neon usage-based billing](https://neon.com/blog/new-usage-based-pricing). Supabase has a São Paulo region, but each project includes its own Postgres compute and the paid plan includes a fixed bundle of compute, database, and bandwidth. [Supabase regions](https://supabase.com/docs/guides/platform/regions), [Supabase pricing](https://supabase.com/pricing), [Supabase compute billing](https://supabase.com/docs/guides/platform/billing-on-supabase).
 
@@ -88,7 +90,7 @@ flowchart LR
     Import --> PG
 ```
 
-Keep PostgreSQL records small and relational. A `media_assets` row should contain an opaque object key, tenant/user ID, byte size, content type, checksum, encoding details, and state. A `tracks` row points to one or more assets. Playlist and tag relations point to track IDs. Do not store the object itself in the row.
+Keep PostgreSQL records small and relational. A `media_assets` row should contain an opaque object key, tenant/user ID, byte size, content type, checksum, encoding details, and state. A `tracks` row points to its one current content entity. Playlist memberships point to track IDs, group memberships point to playlist IDs, and an optional track artist reference points to the user-owned artist. All collection membership is manual. Do not store the object itself in the row.
 
 For uploads, the API authenticates the user and creates a pending media record. It issues a short-lived upload grant so the client can send the audio directly to object storage, including multipart upload for large files. On completion, the API verifies object size and checksum, then marks the media asset ready. A cleanup job removes abandoned staging objects and pending records.
 
