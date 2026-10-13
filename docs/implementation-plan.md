@@ -1,642 +1,1298 @@
 # Song Sleeve implementation plan
 
-**Status:** planning  
-**Last updated:** 2026-10-07
+**Status:** planning; plan revision 2 (restructured for implementation), describing the **v1 release**
+**Last updated:** 2026-10-13
+**History:** [plan revision 1](research/implementation-plan-v1.md) · [review and owner decisions](implementation-plan-review.md)
 
-## Product direction
+## How to use this document
 
-Song Sleeve is local-first. Every song, synced or unsynced, has one authoritative track document containing its stable identity, name, optional artist, duration, size, and current audio/source reference. This is a PostgreSQL catalog record, not a separate document database; audio bytes stay in files or object storage. For unsynced tracks, it describes the last file and metadata explicitly accepted by the user, which can become stale if the original file changes externally. External changes never silently rewrite the document. All accepted app edits belong to the account: running devices apply dispatched changes for synced and unsynced songs alike, including minimized installed clients whenever their platform permits background execution; suspended/offline devices catch up when execution/connectivity resumes. The binary is separate from the document, and manual replacement preserves the track identity. Catalog and organization changes require a live authenticated connection and server acceptance; cached browsing and already-local playback work offline. Explicit unsync removes controlled audio copies but preserves the document with no active source until the user selects a local file or deletes the track. For an unsynced track, the active local source is the user’s selected managed copy or linked original location. Once cloud sync is enabled and the upload verifies, an installed desktop/native client keeps the song in its app-managed `Songs` directory and plays from that local file. The bucket is the synchronization source used to populate/update local `Songs`, never the native/desktop playback source. On web only, a synced track is fetched from the bucket one complete song at a time into a transient player resource. Device paths and access grants stay local.
+| Part | Use it for |
+| --- | --- |
+| [1. Product](#1-product) | Scope, platforms, the two kinds of songs, glossary |
+| [2. Core rules](#2-core-rules) | The invariants. Each rule is stated **once** with a stable ID (`R-…`). Other sections cite the ID instead of restating the rule |
+| [3. State model](#3-state-model) | Every status a song, operation or device can be in, with its UI label |
+| [4. Architecture](#4-architecture) | Stack, components, repository layout, engineering conventions |
+| [5. Data model](#5-data-model) | Server PostgreSQL and device-local schemas |
+| [6. API](#6-api) | Endpoints grouped by module and the shared request contract |
+| [7. Flows](#7-flows) | Step-by-step behavior that combines the rules |
+| [8. Screens and player](#8-screens-and-player) | UI requirements and visual tokens |
+| [9. Platform adapters](#9-platform-adapters) | Web, desktop and mobile specifics |
+| [10. Infrastructure](#10-infrastructure-and-operations) | Railway, bucket, Vercel, deployment, operations |
+| [11. Open decisions and spikes](#11-open-decisions-and-spikes) | Everything not yet decided or proven (`D-…`, `S-…`) |
+| [12. Delivery plan](#12-delivery-plan) | Dependency-ordered milestones with exit tests |
 
-Songs live together in one logical collection and are organized only by optional user-assigned artists, manually populated playlists, and manually populated groups of playlists. A playlist contains only songs; a group contains only playlists. Library type filters are display preferences, not organizational collections. Adding a song to a playlist changes configuration; it never moves the audio into a playlist folder or makes another copy.
+Choices still open are listed as **Open** in [§11](#11-open-decisions-and-spikes); everything else in this plan is decided. The repository layout and supporting libraries (§4.1, §4.3) are proposals confirmed when M0 starts.
 
-## Visual style foundation
+---
 
-Use Graphite for the app background, Charcoal for general-purpose surfaces, Sand Dune as the secondary color, and Blaze Orange as the primary color.
+## 1. Product
 
-| Token | Color | Initial role |
-| --- | --- | --- |
-| `color-background` | Graphite `#2D2D2A` | Main app background and broad page canvas |
-| `color-surface` | Charcoal `#4C4C47` | General-purpose surfaces such as panels, cards, navigation, and the persistent player bar |
-| `color-secondary` | Sand Dune `#E5DCC5` | Secondary emphasis, selected-state accents, and progress/highlight details |
-| `color-primary` | Blaze Orange `#F26419` | Primary actions and prominent active controls |
+### 1.1 Direction
 
-Use white text on Graphite and Charcoal, and near-black ink (`#161615`) on Sand Dune and Orange for readable labels. Approximate WCAG contrast ratios are 13.81:1 for white on Graphite, 8.63:1 for white on Charcoal, 13.26:1 for near-black ink on Sand Dune, and 5.70:1 for near-black ink on Blaze Orange. White text on Blaze Orange is only about 3.18:1; use near-black labels on primary buttons. Sand text on Charcoal is approximately 6.32:1, while Orange text on Charcoal is only about 2.72:1, so use Sand or white for ordinary text links and reserve Orange for primary fills and graphical accents. Do not rely on color alone for selected, playing, sync, or error states; pair it with labels/icons. These are initial color tokens—the typography, spacing, icon family, and motion rules can be defined as the visual system develops.
+Song Sleeve is a **local-first** music player with an **opt-in cloud library**. There are two kinds of songs:
 
-## Architecture review checklist
+- **Synced songs** have an account-level **track document** in PostgreSQL and one verified audio file in a private bucket. Every device on the account sees them. Installed apps mirror them into their local `Songs` directory and play from it. The web plays them from the cloud.
+- **Local songs** (also called **unsynced songs**) exist **only on the device that imported them**. Their audio file stays wherever it already is in the device's storage; it is never placed in `Songs`. The device's database records the song and points to that file. The server stores nothing about them: no metadata, no paths, no counts. Other devices can't see them. Uninstalling the app or clearing its data loses the songs and every change made to them (the files themselves stay where they are). They become account data only when the user syncs them.
 
-Resolve these items in order before treating the design as implementation-ready. Items 1–3 record the agreed playback-source, authoritative-track, account-update, and explicit unsync rules. Item 4 fixes lifetime identity and unconditional content replacement for every explicit source-file submission; duplicate-file detection/reuse is not required. Item 5 now defines per-user/track serialization, device notifications, and playback-safe deferred application; transfer recovery details remain open. Item 6 now requires online server acceptance for edits and disallows offline mutation replay. Item 7 now specifies a device listener and native background synchronization; its feasibility tests will happen during implementation. Item 8 now has approved song limits of 30 minutes AND 128 MiB across every client; browser resource and enforcement tests remain for implementation. Item 9 now defines 30-day sessions, email password recovery, and irreversible hard deletion with later device cleanup. Data-integrity/delivery details and implementation tests for items 7–9 remain open; item 10 is resolved: artists, manually populated playlists, and non-nested groups of playlists are the complete organization model. The complete review and focused research notes are in [the architecture review folder](research/architecture-review/architecture-review.md).
+Organization is account-level: optional artists, manual playlists (of songs) and manual groups (of playlists). A playlist can contain local songs, but those memberships are stored only on the device that owns the songs (a *device overlay*). On every other device the same playlist shows only its synced songs. Until a local song is synced, it is a "ghost" everywhere except its own device.
 
-- [x] **Track identity and playback source:** `tracks` holds metadata and a stable ID; one current content-version ID identifies its audio. Unsynced playback uses the selected local copy or linked origin. Synced desktop/native playback always uses that device’s managed `Songs` file; cloud storage only populates/updates local `Songs`. Web is the exception: it fetches one selected synced song from the bucket into a transient Blob and releases it when another song is requested. Device paths never sync to the server.
-- [x] **Single authoritative track document:** every synced and unsynced song has one `tracks` record with its current name, optional artist, duration, byte size, format/checksum, content-version ID, and source descriptor. Content versions identify verified audio generations and transfers; they are not competing catalog documents. In-app edits update the document; synced file replacements update it after verification. External edits to an unsynced file leave its saved metadata unchanged until the user manually selects/confirms its source again. Startup checks update device health only. Source modes distinguish managed `Songs` from linked originals; cloud readiness is separate, and actual paths/grants remain device-local. See [authoritative track document and update rules](#authoritative-track-document-and-update-rules).
-- [x] **Account updates and source lifecycle:** track documents are account-level; app changes reach running devices through the Device Sync Service; background execution is attempted when permitted, with resume/reconnect/open catch-up. Replacements preserve identity/memberships and offer name/artist suggestions. Confirmed unsync removes cloud audio and its app-controlled `Songs` mirrors, including cloud-derived web offline copies, while retaining the track as `needs_source`. Show the affected songs and consequences before confirming a song/playlist/group operation; users then select a local file or delete the track. Offline devices clean up when they next reconnect. Explicit-unsync overrides prevent enabled scopes from reuploading these tracks. See [account-level updates and source replacement](#account-level-updates-and-source-replacement) and [explicit unsync and missing-source recovery](#explicit-unsync-and-missing-source-recovery).
-- [x] **Track lifecycle identity and repeated source uploads:** `track_id` remains fixed. Every confirmed source-file submission deletes the old content entity, creates a new entity with a fresh immutable ID, and replaces the track’s content reference—even for the same path, file, or checksum. Do not detect/merge duplicate uploads or reuse old content based on equal bytes. Metadata-only edits and automatic mirroring do not submit a new source; retries of the same operation remain one operation. See [track identity throughout its lifecycle](#track-identity-throughout-its-lifecycle).
-- [ ] **Cloud lifecycle and races (serialization/notifications resolved):** permit only one active server-coordinated sync operation for each `(user_id, track_id)`, across devices and content replacements; queue distinct overlapping requests and attach duplicate requests to the existing operation. On completion, persist and notify all devices of the accepted change. Clients update local `Songs`; a currently playing resource stays pinned until playback ends, with an update notice, then applies pending replacement/removal. Offline devices catch up on reconnect. Still finalize lease/grant recovery, retry/idempotency contracts, tombstone retention, and orphan cleanup. See [serialized sync and device notifications](#serialized-sync-and-device-notifications) and [apply changes after current playback finishes](#apply-changes-after-current-playback-finishes).
-- [ ] **Online-only changes and tenant integrity (editing policy resolved):** account/library edits require an authenticated server acceptance; disconnected attempts fail without local application or an offline mutation queue. Cached browsing and local playback remain available. Server revision checks reject stale online edits; request IDs support status recovery/idempotency, not deferred offline writes. Finalize same-user relationship constraints, request-receipt handling, and event/cursor delivery contracts. See [online-only changes and server acceptance](#online-only-changes-and-server-acceptance).
-- [ ] **Installed-client storage and media spike:** validate the persistent `Songs` directory, startup and event-triggered reconciliation/downloads, Capacitor file permissions/background playback, native Now Playing metadata and lock-screen/headset controls, native push wake-ups/background transfers on iOS/Android, and the desktop packaging/storage adapter if desktop installs are in scope. The listener/background-update behavior is agreed below; its platform feasibility tests will be performed during implementation. See [device change listener and background synchronization](#device-change-listener-and-background-synchronization) and [Now Playing and system media controls](#now-playing-and-system-media-controls).
-- [ ] **Song limits and web resources (limits approved; implementation tests pending):** every imported or replacement song must be at most 30 minutes AND 128 MiB (134,217,728 bytes), including local-only, Drive-origin, and cloud-synced songs on web/native/desktop. Both limits are inclusive. Client validation, Gin metadata checks, and independent cloud verification enforce the rule; runtime codec, memory, quota/eviction, cancellation/Blob release and offline-download tests remain. See [approved song limits](#approved-song-limits), [browser capacity](#web-song-size-and-browser-capacity), and the [research report](research/reports/Song%20sizes%20and%20browser%20limits.html).
-- [ ] **Account lifecycle (behavior agreed; implementation tests pending):** use server-revocable 30-day sessions, protected email password reset with mandatory logout of all devices, and recent reauthentication plus explicit confirmation for irreversible account deletion. Persist a non-cancellable deletion request; revoke sessions first, hard-delete app-controlled media and related data, then delete the user. Restricted device-cleanup receipts survive account deletion so native/desktop/browser caches purge on a later online check. Test mail retry, revocation, transfer races, worker recovery, post-deletion lookup and local cleanup; backup-retention handling remains an infrastructure requirement. See [session lifetime and credential storage](#session-lifetime-and-credential-storage), [password recovery](#password-recovery), and [irreversible account deletion and device cleanup](#irreversible-account-deletion-and-device-cleanup).
-- [x] **Organization boundaries:** users explicitly create playlists/groups and edit their memberships/order. Playlists contain songs; groups contain playlists and cannot contain other groups. Optional artist assignment is explicit user metadata. No rule-generated collections or recursive hierarchy. Library type visibility remains an account-level display preference. See [organize music](#organize-music).
+<a id="drive"></a>
 
-Review materials: [full architecture review](research/architecture-review/architecture-review.md), [catalog/API notes](research/architecture-review/notes/catalog_api.md), [storage/sync notes](research/architecture-review/notes/storage_sync.md), and [player/deployment notes](research/architecture-review/notes/player_deployment.md).
+### 1.2 Platforms and scope
 
-## Recommended stack
+| Platform | Local songs | Synced songs | Notes |
+| --- | --- | --- | --- |
+| **Desktop app** (Windows, Linux) | Yes (the file stays where it is) | Mirrored to local `Songs` and played locally | Wails, with Electron as the fallback (D-1). macOS comes later |
+| **Mobile app** (Android, Capacitor) | Yes (the file stays where it is) | Mirrored to local `Songs` and played locally | Native player and background work. iOS comes later: Capacitor supports it, but there's no Mac or iPhone to build and test on (D-22) |
+| **Web app** (Vercel) | **No** | Played from the cloud, one whole song at a time | **Owner-only in this release** (R-WEB-ACCESS, D-26): built and tested as milestone M3, but only allowlisted accounts can register or sign in. Online-only: nothing offline, nothing stored on the device (R-WEB). Songs added on the web are synced automatically. Asking to keep a song local shows an "install the app" alert |
+| **Landing page** (Vercel, public) | — | — | The only public web presence in this release (R-SITE, D-26): presents the app and its features and links to the downloads. No account, no sign-in, no API calls |
+
+| In scope (v1 release) | Out of scope (v1 release) |
+| --- | --- |
+| Adding songs from local files only: file and folder import (installed apps), file upload (web) | Streaming or progressive playback; URL-based downloads; Google Drive or any other cloud import |
+| Opt-in sync by song, playlist, group or the whole library, for allowlisted accounts first (R-CLOUD-8) | Smart or rule-based collections; nested groups |
+| Email-and-password accounts (no email verification for now), 90-day sessions, password reset, irreversible deletion | Duplicate detection or reusing content by checksum |
+| Persistent player, system media controls, background updates | Cover-art lookup; gapless playback or crossfade; transcoding or trimming |
+| | The iOS app (later, D-22) |
+| | A public web app: sign-in and playback on the web for anyone but allowlisted accounts (D-26) |
+| | Sorting lists by name, artist or date (order is manual only); album and track number; an in-app volume control (the system volume is used) (D-36) |
+| | Database backup policy and restore drills (later version, D-16); a backup copy of song audio (D-3) |
+| | Any offline or on-device storage on the web (D-5); offline edits to server data |
+
+### 1.3 Glossary
+
+| Term | Meaning |
+| --- | --- |
+| **Synced song / track** | A song saved on the server: a track document (`tracks`) and, once its upload completes, cloud content. Installed apps mirror it in `Songs` |
+| **Local song** (= **unsynced song**) | A song that isn't saved on the server and isn't in `Songs`. Its source is a file somewhere in the device's own storage. It and its changes exist only on that installed device and are lost on reinstall. It's a "ghost" everywhere else |
+| **Pending track** | A track document created at the start of a sync, before it has any content (R-ID-3). Every device shows it as **Syncing…**; it is deleted if the sync fails (R-ID-4) |
+| **Content** | The immutable record of one verified audio payload in the cloud (`track_content`). It is not a version history |
+| **`Songs` folder** | The user-visible `Song Sleeve` folder (in the home folder on desktop; a folder the user creates or picks at the top of storage on Android, §9.5), one subfolder per account (R-DEV-4). It holds **only synced songs**: their mirrors, and the file of a song this device is syncing. The user can open and edit it, and the folder check (§7.13) puts it back to an exact mirror of the server |
+| **Source file** | The file in device storage that a local song plays in place. The app never modifies, moves or deletes it |
+| **Device overlay** | Device-only membership and position entries that place local songs in account playlists and in the library order |
+| **Installed app** | The desktop app or the mobile app |
+| **Scope** | A sync target: `library`, `playlist` or `group` |
+| **Operation** | A server-coordinated change to one track that holds that track's slot (R-SYNC-1) |
+| **Device Sync Service** | The listener and reconciliation coordinator, one per installation (R-DEV-1) |
+| **Pin** | The device's hold on the file or resource that is currently playing (R-PIN-1) |
+
+Syncing is one-way: there is no unsync. A synced song can only be deleted (§7.8).
+
+UI action names: **Sync to cloud**, **Pause automatic sync**, **Replace audio file**, **Remove from playlist / group**, **Delete song**.
+
+In this plan "local" always means unsynced. A synced song's file in `Songs` is called its **mirror**, never a local song.
+
+---
+
+## 2. Core rules
+
+<a id="authoritative-track-document-and-update-rules"></a><a id="track-identity-throughout-its-lifecycle"></a>
+
+### 2.1 Data ownership (`R-OWN`)
+
+- **R-OWN-1 The server knows only synced songs.** `tracks`, `track_content`, server memberships, artist references, counts and events cover synced songs only. No metadata, path, checksum or count of a local song is ever sent. The one exception is the request that starts syncing that song.
+- **R-OWN-2 Local songs exist only on their device.** A local song lives in the account's namespace on one installed device. Its metadata, source-file locator, playlist overlay entries and library position are all local, and so is every change made to them. Reinstalling the app, clearing its data or losing the device loses the song record and those changes; the source file itself stays in device storage. The UI states this the first time the user imports locally, and the Profile screen repeats it.
+- **R-OWN-3 Each account has its own device namespace.** All device data is kept per account: `Song Sleeve/{account folder}/…` for the `Songs` mirror and one SQLite database per account in app-private storage. Signing in with another account never shows or touches the first account's data.
+- **R-OWN-4 Organization is account-level.** Artists, playlists, groups, the Library view preference and sync scopes are server entities. Local songs take part only through the device overlay (R-ORG-4).
+- **R-OWN-5 The web has no local songs.** Everything added on the web is synced (R-CLOUD-2).
+- **R-WEB The web is online-only.** It has no offline features and stores nothing on the device: no IndexedDB, OPFS, Cache Storage or service-worker cache, and no audio. The catalog, pending requests and player state live in memory and are fetched again after a reload. The only device files the web ever reads are the ones the user picks to add a song (which syncs at once) or to replace a synced song's audio. Offline or local features require the desktop or mobile app (D-5).
+- **R-WEB-ACCESS The web app is owner-only in this release (D-26).** It is a full milestone (M3) and is tested end to end, but only accounts with cloud sync (`users.cloud_sync_enabled`, R-CLOUD-8) can use it.
+  - **Server-enforced:** registering from the web with an email outside `CLOUD_SYNC_ALLOWLIST`, or signing in from the web to an account without cloud sync, is rejected with `web_app_unavailable`: "Song Sleeve on the web is coming soon. Download the app to get started." No web session is created. The server tells web requests apart by their session transport (cookie, R-AUTH-3).
+  - **Not linked publicly:** the landing page never links to the web app, and the web app is excluded from search engines (`noindex`). Hiding the URL is not the protection; the server check is.
+  - Everyone else registers and signs in only in the installed apps.
+  - Opening the web to everyone later means removing this check together with opening cloud sync, since the web can only play synced songs. No data changes.
+- **R-SITE The public landing page is the only public web interaction (D-26).** A static site that presents Song Sleeve and points to the downloads (§8.5). It has no account features, makes no API calls, sets no cookies and stores nothing.
+
+### 2.2 Synced-track identity and content (`R-ID`)
+
+- **R-ID-1 Each synced song has one document.** The `tracks` row holds `track_id`, owner, name, nullable `artist_id`, duration, byte size, format, checksum, `state` (`pending_upload` or `ready`), `current_content_id` (null while pending), revision and library position. Device paths and access grants never reach the server.
+- **R-ID-2 A track ID lives as long as the sync.** The ID is assigned when a sync starts and lasts until the track is deleted. It is never reused. Adding the same file again after a delete creates a new track ID.
+- **R-ID-3 Things are created in a fixed order.** Each step completes before the next one starts:
+  1. Create the track document, online and without content (`pending_upload`). It includes the metadata, library position and playlist memberships.
+  2. On installed apps, place the file in local `Songs` (R-CLOUD-4).
+  3. Upload the file to a staging key.
+  4. A worker verifies the file and publishes it to its final key (R-CLOUD-5).
+  5. One transaction sets `current_content_id`, sets `state=ready` and appends the event.
+
+  A replacement follows the same order on an existing track. The old content stays current until the switch in step 5. If any step fails, the whole sync is undone (R-ID-4).
+- **R-ID-4 A sync is all-or-nothing, and its progress is visible on every device (D-7).**
+  - **Visible everywhere:** once the track document exists, every device lists the song and its playlist memberships with **Syncing… x%**. Other devices can't play or download it until it is `ready`; the originating device keeps playing it from its source file.
+  - **Progress:** the uploading device reports confirmed bytes with its heartbeat, and the server can also read the parts already in the bucket. The server stores the progress on the operation and sends a coalesced progress hint over SSE (at most every few seconds). Progress hints are not `account_events` rows; a device that connects later reads progress from the operation.
+  - **All-or-nothing:** a sync ends in exactly one of two ways:
+    - **Success:** the content is set and the track becomes `ready` (R-ID-3 step 5).
+    - **Failure:** one server transaction deletes the track document, its memberships and its operation, and appends a `track_sync_failed` event. Workers then delete its staging objects and abort partial multipart uploads. Every device removes the song as if it never existed on the server.
+  - **What counts as a failure:**
+    - the worker rejects the file (checksum, limits, invalid audio)
+    - the user cancels, or deletes the syncing song, from any device
+    - the upload stops making progress for longer than the stall timeout (**5 minutes**, D-7): a closed tab, a killed app, a device that went offline
+    - an upload error that can't be retried
+
+    Network errors are retried automatically on the same operation, as long as the stall timeout hasn't passed.
+  - **After a failure, on the originating device:** the `Songs` copy is removed, and the song is local again with its overlay entries restored. It is marked `sync_failed` and shows **Sync failed: {reason}** with **Try again**, which puts it back in the queue as a new sync with a new track ID (R-ID-2). On the web the tab shows the failure, and nothing is kept.
+  - **No automatic retry of a failed sync (D-25).** A failed song is never re-queued by itself: auto-sync and enabled scopes skip `sync_failed` songs. Only the user retries, either one song (**Try again**) or in bulk (**Retry failed syncs** on Songs, a playlist or a group, which re-queues only that list's failed songs). Within one running sync, resuming an interrupted upload part on the same operation is not a retry and still happens automatically until the stall timeout.
+  - **Replacements are all-or-nothing too, but a failure never deletes the song.** A song is never left without audio:
+    - The old content stays current, playable and stored in the bucket for the whole replacement. Every device shows **Updating audio… x%** and keeps playing it.
+    - The old content is retired only in the same transaction that switches to the new content, after the new upload has finished and been verified (R-ID-3 step 5). Its file is deleted after that.
+    - Any failure (the same list as above, including the 5-minute stall) discards the new upload and its staging. The song keeps its old content and metadata, and the suggestion choices are not applied.
+  - **Keeping progress visible within 5 minutes:** uploads use multipart parts small enough that each one finishes well within the timeout on a slow connection. The server counts progress from heartbeats or from parts that arrive in the bucket, so a mobile upload the OS moved to the background still counts as long as parts keep arriving.
+- **R-ID-5 Every explicit replacement creates fresh content.** Confirming any file as a synced song's new audio creates new content with a fresh immutable ID. The old content is retired only when the new content becomes current (R-ID-4). This happens even when the file or its checksum is identical. There's no checksum shortcut, duplicate detection or reuse. A network retry with the same request ID continues the same operation. Downloading or mirroring existing content never creates content.
+- **R-ID-6 Integrity is checked with SHA-256.** The checksum is SHA-256 over the complete file, and sizes are exact byte counts. Multipart ETags are never treated as checksums.
+- **R-ID-7 Retired content is never played again.** After a replacement or removal, the old content can't start new playback anywhere. The only temporary exception is a playback pin (R-PIN-1).
+
+### 2.3 Local songs (`R-LOCAL`)
+
+- **R-LOCAL-1 Local import works offline and keeps files where they are.** Installed apps import a local song by recording a locator (desktop path, or Android SAF URI) to its source file in device storage. Nothing is copied into `Songs`, and no server is involved.
+- **R-LOCAL-2 Local changes stay on the device and work offline (D-18).** The server never sees them, and they are lost on reinstall like the song itself. The following change only device data, so they work without a connection:
+  - renaming a local song, or changing its artist
+  - pointing it at another source file (**Replace audio file**)
+  - deleting it
+  - adding, removing or reordering its overlay entries
+
+  Changing server data still follows R-MUT-1.
+- **R-LOCAL-3 External changes only affect health.** If someone edits, renames, moves or replaces a source file outside the app, only the song's health changes (`source_changed`, `needs_relink`, `access_denied`). The saved metadata never changes on its own. Only **Replace audio file** rereads the file.
+- **R-LOCAL-4 The app never touches files outside `Songs`.** Import, sync, delete, logout and account deletion never modify or delete source files. A local song's source can't be inside the `Song Sleeve` folder: import rejects such files with "This file is in the Song Sleeve folder, which only holds synced songs." The app writes outside `Songs` only to create a new file the user asked for.
+- **R-LOCAL-5 Syncing is one-way.** There is no unsync: a synced song never goes back to being local. To take a song out of the cloud, the user deletes it (§7.8), which removes it from every device.
+
+<a id="online-only-changes-and-server-acceptance"></a>
+
+### 2.4 Online-only server mutations (`R-MUT`)
+
+- **R-MUT-1 Changes to server data need the server to accept them.** This covers: creating, syncing, replacing or deleting synced songs; their metadata; artists; playlists and groups, with their server memberships and order; the Library preference; and scopes. Each change needs a live authenticated request that the server accepts. If there is no connection, show `connection_required`: **"Connect to the server to make changes. This change was not saved."**
+- **R-MUT-2 Nothing is applied before acceptance.** The client never updates its cache optimistically, never persists a final drag order, and never replays a disconnected attempt later. Form input, file review, staging and drag previews stay uncommitted. Staged files are deleted if the change is rejected or cancelled. A network indicator alone never counts as being connected.
+- **R-MUT-3 Every change carries a revision and a receipt.** Each mutation sends the revision it expects and a unique request ID. The server checks ownership, revision and constraints, then commits the change, its receipt and an account event in one transaction. If the revision is stale, the server rejects the change; the client refreshes and asks the user to confirm again. Sending the same request ID again returns the original result.
+- **R-MUT-4 An unknown result is recovered, not resent.** If the client can't tell whether a change went through, it shows **"Could not confirm this change. Reconnect to check its status."** It keeps the request ID and asks `GET /me/mutations/{requestID}` once reconnected. It never resubmits the change as a new action.
+- **R-MUT-5 The user chooses replacement metadata first.** This rule covers what happens when a new file is picked for a song that already has a name or artist:
+  - **Suggestion step.** For each field, show the current value next to the value extracted from the new file. The user picks **Keep current** or **Use new**, or types a value. This happens *before anything is applied or uploaded*.
+  - **Upload.** It starts only after the user confirms (R-ID-3). The chosen field values and the new content commit in the same transaction.
+  - **Conflict.** If another device changed one of those fields during the upload, the content switch still commits, and that field is shown again as a suggestion (the newer value versus the user's choice). It is never overwritten silently.
+  - **No reverts.** A later upload completion never undoes a metadata-only edit.
+  - **Local songs** use the same suggestion step, applied on the device.
+- **R-MUT-6 Accounts can't reach each other's data.** Every relationship stays within one user: composite `(user_id, id)` foreign keys, plus an ownership check in every query and every object-storage operation. Knowing an ID never grants access.
+
+<a id="organize-music"></a>
+
+### 2.5 Organization (`R-ORG`)
+
+- **R-ORG-1 Organization is manual and fixed.** There are only artists, playlists (which hold songs) and groups (which hold playlists). There is no nesting, no parent IDs, no rules and no rule worker. Requests with unsupported child types or rule fields are rejected.
+- **R-ORG-2 Artists are set explicitly.** The artist field is optional and starts blank. A suggestion never assigns or creates an artist unless the user confirms it.
+  - **Synced songs:** saving one creates the server artist, or reuses an existing one with the same normalized name.
+  - **Local songs:** they store the artist name locally and link to an existing server artist with the same normalized name. A new name creates its server artist only when the song syncs.
+  - **Smart artist search (D-10).** Wherever an artist is picked (adding songs, editing a song, the replacement suggestion step), the field searches as the user types and shows existing artists with **similar** names, not only exact ones. Before **New artist "{typed}"** is created, any similar artist is shown first as **Did you mean {artist}?** The user decides; nothing is merged or replaced automatically, and creating a new artist with a similar name is still allowed.
+    - **Similarity** ignores case, accents, punctuation and spacing (`AC/DC` ≈ `ACDC`, `Beyoncé` ≈ `Beyonce`), a leading "The" (`Beatles` ≈ `The Beatles`), and `&`/`and`/`n'` (`Guns N' Roses` ≈ `Guns and Roses`). It also tolerates small typos (`Metalica` ≈ `Metallica`) and matches word starts (`zep` finds `Led Zeppelin`).
+    - **Ranking:** exact match, then names starting with the text, then similar names; at most 8 results.
+    - **One matcher for every platform:** it lives in `packages/core` and runs on the artist list the client already has (the replica on installed apps, plus this device's local-song artist names; the in-memory catalog on the web). The artist list is small, so no server-side fuzzy search is needed.
+    - The filename hint (§7.1 step 2) goes through the same matcher, so a suggested "Beatles" offers the existing **The Beatles**.
+- **R-ORG-3 Membership is by reference.** A song can be in many playlists, and a playlist can be in many groups. References never duplicate audio.
+- **R-ORG-4 Local songs join playlists through the device overlay.** A local song can be added to any account playlist. The overlay entry (`playlist_id`, `local_song_id`, position) is stored only on that device, so other devices see the playlist without it. When the local song syncs, the request that creates its track document (R-ID-3) submits its overlay entries as server memberships, and the device removes those entries. If the playlist is deleted, the device drops its overlay entries.
+  - **Playlist deleted during a sync (F-10):** the server keeps only memberships to playlists that still exist when it creates the track, and returns the dropped ones as `dropped_playlist_ids`. It never rejects the sync for this; the device removes those overlay entries.
+  - **Artists of local songs (F-10):** a local song stores the artist **name**; the matched `artist_id` is only a cache. When the server artist is renamed, the device updates local songs linked to it to the new name. When it's deleted (only possible while no synced song uses it), local songs keep the name and lose the link. At sync time the device sends the cached `artist_id` if the artist still exists, otherwise the name, which the server reuses or creates by normalized name (R-ORG-2).
+- **R-ORG-5 Removing is not deleting.** **Remove from playlist / group** removes only the membership. Deleting a playlist keeps its songs and takes the playlist out of its groups. Deleting a group keeps its playlists. Only **Delete song** deletes a song.
+- **R-ORG-6 All ordering uses one key space.** Library, playlist and group order use fractional or lexicographic position keys, so a move writes a single row. Server items and overlay items share the same key space, so a device can merge them by key, breaking ties by ID.
+  - Moving a synced item needs the server. Moving a local item is local.
+  - New songs and members are appended at the end.
+  - Long lists also offer **Move to top/bottom**.
+  - The server rebalances keys when needed.
+- **R-ORG-7 Display preferences aren't organization.** The Library type filter (Songs, Playlists, Groups; all on by default; at least one must stay on) is an account preference.
+
+<a id="optional-cloud-sync-and-local-playback"></a>
+
+### 2.6 Cloud sync (`R-CLOUD`)
+
+- **R-CLOUD-1 Installed apps sync by opt-in.** A local song syncs when the user confirms **Sync to cloud** for:
+  - that song
+  - a playlist or group (only its local songs on this device)
+  - the whole library
+
+  A confirmed scope is saved on the server. From then on, every installed device automatically syncs its own local songs that enter an enabled scope. Only the device that holds a local song can sync it.
+- **R-CLOUD-2 The web syncs everything automatically** (accounts with cloud sync, R-CLOUD-8). A song added on the web is uploaded as a synced song right away. If the user asks to keep a song only on this device, the web shows **"To keep songs only on this device, install the Song Sleeve app."** with links to the downloads, and does not import the song.
+- **R-CLOUD-3 Files are checked before upload.** Before syncing, the file's size and SHA-256 are compared with the facts saved for the local song. If they don't match, the upload is blocked and the song shows **Needs attention** until the user runs **Replace audio file**. Saved scopes never adopt external changes on their own.
+- **R-CLOUD-4 The file goes into `Songs` before upload.** Installed apps first copy the source file into `Songs` (temp file, verify, atomic install), then upload exactly those bytes. The source file stays where it was, untouched: syncing always copies, never moves, and never offers to delete the original. The duplicate space this uses is accepted (owner decision). After the sync, the device plays only the `Songs` mirror. The web uploads straight from the file the user picked.
+- **R-CLOUD-5 Published files are immutable.** Clients upload only to a per-attempt staging key, using a short-lived grant. A trusted worker then publishes the file in five steps:
+  1. Verify the actual bytes: length, SHA-256, a positive and finite duration, a supported codec (D-8, probed from the bytes), and R-LIM-1.
+  2. Write them to a fresh final key, `users/{userID}/songs/{contentID}`, that has never received a client grant.
+  3. Verify the final object again.
+  4. Recheck the operation and account fences.
+  5. Commit step 5 of R-ID-3.
+
+  The worker's second upload doubles service egress. Conditional copy can replace it only after spike S3 proves it works.
+- **R-CLOUD-6 The bucket is where installed apps sync from.** They download synced content into `Songs` and play it locally; they never stream from the bucket. The web fetches one whole song per playback (R-PLAY-2).
+- **R-CLOUD-8 Cloud sync is an upcoming feature, enabled per account (D-23).** In the first release only allowlisted accounts can sync; everyone else uses local songs only.
+  - **Who has it:** `users.cloud_sync_enabled`. It is set to true at registration when the email is in the server's `CLOUD_SYNC_ALLOWLIST` setting (the owner's email), and false for everyone else. Opening sync to all users later means changing the default; no data changes.
+  - **Enforced by the server:** for an account without sync, every sync-related request is rejected with `cloud_sync_unavailable`: creating a track, replacements, upload and download grants, and enabling scopes. Without sync an account has no synced songs, so it uses no bucket storage and its quota is 0.
+  - **Still available without sync:** registration, login, and the account-level organization (artists, playlists, groups, preferences) that local songs join through the overlay. These use only the database, never the bucket.
+  - **UI:** **Sync to cloud** and the scope actions show **Coming soon** and can't be started. An account without sync can't use the web app at all (R-WEB-ACCESS).
+- **R-CLOUD-9 Syncs run through a per-device queue with three workers (D-24).**
+  - Every song to sync (one song, a multi-file add, a scope, auto-sync) enters the device's sync queue as `queued`. Queued songs are still local and the server knows nothing about them.
+  - Three workers per device take songs from the queue and sync them in parallel. A worker creates the song's track document (R-ID-3 step 1) only when it starts that song, so only songs actually uploading are visible as **Syncing…** and subject to the stall timeout.
+  - Each song is independent: one song's failure never stops, cancels or delays the others in the batch.
+  - The queue survives a restart on installed apps (`pending_work`). On the web it lives in the tab's memory, so closing the tab drops the songs that haven't started.
+  - The worker count is a client setting (3 to start).
+- **R-CLOUD-7 Pausing keeps songs synced.** **Pause automatic sync** stops future automatic syncing for a scope. Songs that are already synced stay synced.
+
+<a id="serialized-sync-and-device-notifications"></a>
+
+### 2.7 Serialization and events (`R-SYNC`, `R-EVT`)
+
+- **R-SYNC-1 Only one change per track runs at a time.** Each `(user_id, track_id)` has one slot, covering initial upload, replacement and delete from every device. The slot is keyed on the stable track ID, never on content.
+  - Different tracks run concurrently.
+  - Metadata-only edits, playback and **downloads of immutable content** don't take the slot (D-19). (Plan revision 1 had downloads take it.)
+  - Without the slot, a download can overlap a replacement or delete. The file it fetches is still a valid, immutable content ID: the device installs it only if that ID is still current, otherwise it discards it. The bucket object of retired content is deleted only after the download grants issued for it have expired.
+- **R-SYNC-2 Changes queue instead of overlapping.** While the slot is busy, no second operation or grant starts. A retry with the same request ID attaches to the running operation. A different submission waits in the queue and shows **Waiting for another sync operation**.
+  - A waiting operation has no stall clock. Its 5-minute stall timer starts when it becomes active (F-22).
+- **R-SYNC-3 Queued operations are rechecked before they start.** A queued operation checks revision, ownership and track state before starting. If its target is gone (for example, deleted in the meantime), it is cancelled with an explanation.
+- **R-SYNC-4 Slots are never released by a timeout race.** The slot stores ownership and a heartbeat, not an open database transaction. A failed operation is retried or cancelled before the next one may start. The slot isn't released while issued upload grants could still write: those grants must expire or be retired first.
+- **R-SYNC-5 Timing values (D-17).** There is no separate lease: ownership of an operation lapses at the stall timeout.
+
+  | Timer | Value |
+  | --- | --- |
+  | Heartbeat from the uploading device | 30 s |
+  | Stall timeout (no progress fails the operation, R-ID-4) | 5 min |
+  | Upload grant (signed link for one part; must be *started* within this time) | 5 min |
+  | Download grant (mirror download, web playback fetch) | 15 min |
+  | Mutation receipt retention (R-MUT-4) | 90 days |
+
+  After a failed operation, the slot frees within about 5 minutes, once its last upload grant expires (R-SYNC-4). All values are server settings and can be tuned without design changes.
+- **R-EVT-1 Events are durable.** Each accepted change appends a per-user `account_events` row with a monotonic cursor, in the same transaction as the change. An upload completion is recorded only when the content switches.
+- **R-EVT-2 Notifications are hints, not data.** The event stream and push notifications only say that changes are available. Clients then fetch authoritative data through authenticated catch-up. A push never carries catalog data, credentials or object URLs.
+- **R-EVT-3 Applying events twice is harmless.** Clients ignore duplicate or older revisions and coalesce to the latest. They advance their cursor only after the events and the local work they cause are saved.
+- **R-EVT-4 An expired cursor triggers a full resync.** Events are kept for 90 days (D-15), then deleted by a scheduled job. An expired cursor returns `cursor_expired`, and the client resyncs from a full snapshot.
+- **R-EVT-5 Delivered doesn't mean applied.** Each device tracks `received → staged → applied` locally. A stream or push delivery never counts as "applied".
+
+<a id="apply-changes-after-current-playback-finishes"></a>
+
+### 2.8 Devices, pins and playback (`R-DEV`, `R-PIN`, `R-PLAY`)
+
+- **R-DEV-1 Each installation runs one Device Sync Service.** It is independent of routes, screens and the player. The event stream, the push handler, startup, resume and reconnect all call the same reconciliation coordinator. File work is serialized, so foreground and background workers never install or delete the same file at the same time.
+- **R-DEV-2 Startup and resume always reconcile.** Real-time and background delivery come on top of this; they never replace it.
+- **R-DEV-3 A device deletes only inside its `Songs` folder.** Outside the `Song Sleeve` folder it never deletes anything. Cleanup is tied to content IDs, so a delayed cleanup never removes newer content.
+- **R-DEV-4 The `Songs` folder is an exact mirror of the server.** The folder is user-visible and the user may edit it by hand, so the app never trusts it. The **folder check** (§7.13) compares it with the expected set, using a manifest file kept in the folder (D-29), and fixes every difference: missing or altered songs are downloaded again, and every extra file is permanently deleted (D-21), but only after the device has caught up with the server, and with a confirmation above 20 files. Extra files are never imported as songs. The check runs:
+  - every time the app opens (startup and resume, as part of §7.9), and on desktop when the folder changes, in quick mode
+  - when the user taps **Check Songs folder** in Settings
+  - before every change of a synced song's source (§7.7), and the replacement waits for it to finish
+- **R-PIN-1 The playing resource is pinned.** If an accepted change affects the song that's playing (a replacement, or a delete from another device), the device keeps the file or Blob, the playback snapshot, the position, the queue and the controls. It shows **"This song was updated. Changes will be applied after playback finishes."** For a removal, the notice says the song will be removed after playback.
+- **R-PIN-2 Ending playback releases the pin.** The song ending naturally, a voluntary stop, or switching songs releases it. Pausing or navigating doesn't. With repeat-current-song on, the boundary is processed before the song repeats.
+- **R-PIN-3 Pending changes apply when the pin is released.** The staged replacement is installed atomically and the retired file is deleted. If the replacement isn't ready yet, show **Needs download**; never play the retired content again. If nothing is playing, apply the change right away. Library views show the new document immediately.
+- **R-PIN-4 The newest pending change wins.** Superseded staged files are discarded. Pending work survives a crash, and after a restart cleanup runs before any new playback.
+- **R-PIN-5 Local removals stop playback immediately.** Deleting the current song on this device stops playback at once. So does account deletion, on every device.
+- **R-PLAY-1 Installed apps play only local files.** Local songs play their source file in place. Synced songs play from their `Songs` mirror.
+- **R-PLAY-2 The web plays one whole cloud song at a time.**
+  - Request a read grant, fetch the complete song into one Blob with one object URL, and start playing only after the fetch finishes.
+  - Hold exactly one resource. On switching songs, cancel any fetch in progress, stop, clear the source, revoke the URL and release references.
+  - Never prefetch, hold a second Blob or keep a persistent cache.
+  - Never make an extra `ArrayBuffer`, encode to Base64, or run `decodeAudioData()` on a full song.
+- **R-PLAY-3 Unplayable songs stay visible.** Songs that need relinking or downloading, or that are still syncing, stay in every list with their status and actions. The queue skips them.
+- **R-PLAY-4 Repeat-one turns off on every track change.** This applies whether the change came from the app, a headset or the system controls.
+- **R-PLAY-5…8 Player defaults (D-11).**
+  - **Previous** restarts the song if more than 3 s have played; otherwise it goes to the previous song.
+  - Turning shuffle off restores the original order, continuing from the current song.
+  - The queue is a snapshot of the list when playback starts. Later edits to that list don't change it; removals still apply through pins.
+  - After a restart, installed apps restore the last player state, paused. The web starts empty after a reload (R-WEB).
+
+<a id="approved-song-limits"></a>
+
+### 2.9 Song limits (`R-LIM`)
+
+- **R-LIM-1 Every song is limited to 30 minutes AND 128 MiB, both inclusive.** This applies to local and synced songs on every platform, from every source and in every mode, and to every replacement.
+  - Duration must be positive, finite and at most 1,800 s.
+  - The complete file, including headers and artwork, must be at most 134,217,728 bytes.
+  - If either fact is unknown, that's an error. Files are never trimmed or transcoded to fit.
+- **R-LIM-2 Every layer enforces the limits.**
+  - In the client's review list, invalid rows can't be confirmed.
+  - The API checks the declared facts before it creates a track or issues a grant.
+  - The worker checks the bytes it actually received.
+  - Every download (mirror, web fetch) counts the bytes it receives. It cancels and cleans up on overflow, even if `Content-Length` is missing or wrong.
+- **R-LIM-3 An invalid replacement changes nothing.** Staging is cleaned up and the originals are left untouched.
+- **R-LIM-4 One endpoint defines the policy.** `GET /media-policy` returns `max_duration_seconds: 1800` and `max_file_bytes: 134217728`. The error codes are `song_too_long`, `song_too_large`, `invalid_audio_metadata`, `unsupported_format`, `storage_quota_exceeded` and `cloud_sync_unavailable`.
+- **R-LIM-5 Each account has a cloud storage quota of 25 GB (D-6).**
+  - The default is 25 GiB (26,843,545,600 bytes), stored per account so it can be changed for one account or for everyone later.
+  - **Usage** is the bytes of every synced song's current content, plus the bytes reserved by syncs and replacements in progress. Local songs never count.
+  - **Reservation:** starting a sync or a replacement reserves the file's declared size in the same transaction that creates the track document or the operation. If usage plus the reservation would exceed the quota, the request fails with `storage_quota_exceeded` and nothing is created or uploaded.
+  - **Release:** a failed sync or replacement releases its reservation. A replacement's old content stops counting when the switch commits. A deleted song stops counting when its delete commits, even though the bucket cleanup may run later.
+  - The worker already checks that the received bytes match the declared size (R-CLOUD-5), so a reservation can't be cheated.
+  - **UI:** Profile shows "x GB of 25 GB used"; a warning appears at 90%; a sync blocked by the quota shows **"Your cloud storage is full. Delete synced songs to free space."** On installed apps the song stays local.
+
+### 2.10 Account lifecycle (`R-AUTH`)
+
+- **R-AUTH-1 No email verification for now (D-13).** Registering with an email and password creates the account and signs the user in at once; no verification email is sent. Accepted risk: someone can register an address they don't own, which then blocks its real owner (emails are unique and permanent, R-AUTH-7). Verification can return after the custom domain is set up (§10.3).
+- **R-AUTH-2 Only registration reveals that an email is taken.** Without verification, registering an email that's already used must say so: `email_unavailable`, "An account with this email already exists. Log in or reset your password." Registration is rate-limited per IP to slow down probing for accounts. A password-reset request still always returns a generic response.
+- **R-AUTH-3 Sessions are opaque and last exactly 90 days.**
+  - The lifetime is 7,776,000 s (90 days) with no sliding renewal, and only a hash of the token is stored.
+  - Every request checks expiry, revocation and the deletion gate.
+  - **Two transports (F-7):** the web gets the session as a Secure HttpOnly cookie, with CSRF protection on every cookie-authenticated write. Installed apps log in with their platform and device ID, get the token in the response body, keep it in the OS secure store and send it as `Authorization: Bearer`; they never use cookies, so CSRF doesn't apply. A session is bound to its transport: a bearer token is never accepted as a cookie, or the reverse.
+  - **CORS:** the API allows credentialed CORS only for the exact web origins. Installed apps make their API and bucket requests from native code (Go services on desktop, native plugins on Android), so they need no CORS entry; if a spike shows a webview must call the API directly, its exact origin (for example `wails://wails`, `http://wails.localhost` or Capacitor's `https://localhost`) is added without credentials.
+  - **Which client is the web:** cookie sessions are web sessions, which is what R-WEB-ACCESS checks. The sync allowlist (R-CLOUD-8) is enforced on every request regardless of transport.
+- **R-AUTH-4 A password reset signs out every device.** It doesn't sign anyone in automatically.
+- **R-AUTH-5 Account deletion is irreversible and durable.**
+  - It requires reauthentication (a single-use proof valid for 5 minutes) and an explicit confirmation.
+  - When accepted, the request and the account gate commit together. There is no cancel.
+  - A worker retries until everything is hard-deleted, and deletes the user row last.
+- **R-AUTH-6 Authentication failures never delete files.** A 401, a 404, a timeout or a logout never erases local data. Only a confirmed deletion status, read with the restricted cleanup credential, starts a device purge. That purge also removes the account's local-song records; their source files stay in device storage.
+- **R-AUTH-7 The email is the account's permanent identity (D-12).** Each email belongs to exactly one account (normalized and unique), and it can't be changed: there is no change-email feature. A user who wants another email creates a new account.
+- **R-AUTH-9 Password policy (D-31).** Applies to registration, reset and change:
+  - **Length:** at least 10 and at most 128 characters; any characters, including spaces, with no rules about character types. The text is Unicode NFC-normalized before hashing.
+  - **Blocklist:** the 10,000 most common passwords are refused with `password_too_common`; a too-short or too-long one gets `password_invalid`.
+  - **Hashing:** argon2id with a per-password salt (starting parameters: 64 MiB memory, 3 iterations, parallelism 1, tuned on the API's hardware). The parameters are stored with each hash, so a later change rehashes on the next successful login.
+- **R-AUTH-10 Terms are accepted at registration (D-32).** Registration requires ticking **"I agree to the Terms of Use and Privacy Policy"** (both linked). The server stores `terms_accepted_at` and `terms_version`. When the terms change, the next login asks to accept the new version before continuing. Until the final pages are published (§10.3 step 6), registration links to draft versions; only the owner uses the app in that period.
+- **R-AUTH-8 Password change requires the current password (D-12).** On Profile, the user enters the current and the new password. On success the server stores the new hash, revokes every other session (the current one stays), and emails "Your password was changed" to the account address. A wrong current password changes nothing and is rate-limited like login.
+
+---
+
+## 3. State model
+
+| Subject | Stored in | Values | UI label |
+| --- | --- | --- | --- |
+| Synced track | `tracks.state` | `pending_upload`, `ready` | Syncing… x% (every device) · Synced. A failed sync deletes the row (R-ID-4) |
+| Operation | `track_sync_operations.state` | `waiting`, `active`, `completed`, `failed`, `cancelled` | Waiting for another sync operation · Uploading x% · Failed (retry) |
+| Synced song on an installed device | `synced_files.readiness` | `ready`, `needs_download`, `downloading`, `pending_apply`, `cleanup_pending` | Ready · Downloading · Needs download · Update after playback |
+| Local song health | `local_songs.health` | `ready`, `needs_relink`, `source_changed`, `access_denied` | Relink needed · File changed · Access lost |
+| Local song sync | `local_songs.sync_state` | `local_only`, `queued`, `syncing`, `sync_failed`, `needs_attention` | On this device only · Queued · Syncing… x% · Sync failed (Try again) · Needs attention |
+| Event application | `pending_work.state` | `received`, `staged`, `applied` | — |
+
+**Needs attention** covers four cases: a checksum mismatch before upload (R-CLOUD-3), an unreadable source, an over-limit file, and a replacement field in conflict (R-MUT-5).
+
+---
+
+## 4. Architecture
+
+<a id="recommended-stack"></a><a id="stack-review"></a>
+
+### 4.1 Stack
 
 | Layer | Choice | Responsibility |
 | --- | --- | --- |
-| Web interface | React, TypeScript, Vite | Library, organization, player, and account screens |
-| Mobile app | Capacitor | Packages the React interface and connects it to native mobile capabilities |
-| API | Go with Gin | Authentication, catalog operations, imports, and device-sync authorization/download grants |
-| Catalog and configuration | PostgreSQL on Railway | User library, track metadata and artists, manual playlists/groups and memberships, display preferences, jobs, and sync state |
-| Optional cloud audio storage | Railway Storage Bucket (S3-compatible object storage) | Stores one cloud copy per song only after the user enables upload/sync |
-| Background work | Go workers | Optional cloud uploads, metadata extraction, and sync coordination |
-| Web deployment | Vercel | Builds and serves the Vite web client and its preview deployments |
-| API, workers, and production data services | Railway | Runs Gin, optional cloud workers, PostgreSQL, and the optional song bucket |
+| Shared UI | React, TypeScript, Vite | All screens, shared by web, desktop and mobile |
+| Web | Vite SPA on Vercel | Cloud-only client |
+| Desktop (Windows, Linux) | **Wails** (Go local services + React); **Electron** if Wails fails S5 (D-1) | Local songs, `Songs` mirror, local playback, background listener, system media controls |
+| Mobile | Capacitor + native plugins | The same as desktop, plus a native player and push/background workers |
+| API | Go + Gin | Auth, catalog, mutations, events, operations, grants |
+| Workers | Go + **River** on PostgreSQL (D-2) | Email, upload verification and publication, cleanup, account deletion, failed and stalled sync cleanup |
+| Catalog | PostgreSQL on Railway | Accounts, synced tracks, organization, operations, events |
+| Audio | Railway Storage Bucket (S3-compatible) | One object per current content of a synced song |
 
-PostgreSQL stores account-synced catalog and organization records, not audio bytes. A verified cloud object key exists only after explicit sync; it represents the remote sync copy, not native playback source. Device-local SQLite stores the server-accepted read/playback catalog cache, outstanding online-request status IDs, each local `Songs` or linked-origin location, sync version and health; paths never become cross-device identifiers. Installed desktop/native clients reconcile cloud manifests into `Songs` at startup and play only local files. Web keeps metadata and loads only the selected synced song from the bucket. Account-level library view preferences are stored in PostgreSQL and sync across devices.
+**Proposed supporting libraries.** These are proposals, not approved choices. See the [stack review](research/reports/Music%20app%20stack%20review.html).
 
-### Stack review and proposed additions
-
-**Review status (2026-10-07):** keep the current React/TypeScript/Vite, Capacitor, Gin, PostgreSQL, Vercel and Railway selections. Supporting libraries and a desktop shell below are proposals, not approved substitutions. The [complete stack review](research/reports/Music%20app%20stack%20review.html) assesses each layer against the current rules and defines priority spikes. The moved [storage/database comparison](research/storage-and-database-research.html) is a historical 2026-10-03 snapshot; its streaming, deduplication and provider recommendations are superseded by this plan.
-
-| Area | Proposed addition or alternative | Gap it addresses |
+| Area | Proposal | Gap addressed |
 | --- | --- | --- |
-| React application | React Router, TanStack Query, dnd-kit; shared application services and platform adapters | Navigation, accepted API state and accessible ordering; user mutations must fail offline without paused/persisted replay or optimistic authoritative writes |
-| Go persistence/contracts | pgx/pgxpool, sqlc, Goose; OpenAPI/oapi-codegen | Typed SQL, explicit tenant/revision transactions and one controlled migration step; does not replace service authorization |
-| Durable workers | River on PostgreSQL | Transactional mail/media/cleanup jobs; its retries/uniqueness do not replace the shared per-user/track operation coordinator or deletion recovery sweep |
-| Mobile capabilities | Native file/grant, local player, background transfer/sync and secure-credential adapters; evaluate optional paid Capawesome File Manager/Audio Player | Capacitor remains viable conditionally; official push/background plugins alone do not implement silent wakeups, persistent originals, media-service playback or durable file application |
-| Desktop packaging | Evaluate Wails first; Tauri/Electron alternatives | React/TypeScript UI with Go local services fits preferred languages; shell, codecs, media controls, grants and distribution remain unselected. Wails is separate from the Railway API |
-| Local persistence | Native-accessible SQLite coordinator; Dexie/IndexedDB metadata and OPFS file adapters on web | Foreground/background file-index coordination, accepted replicas and purge checkpoints; no offline account-edit queue |
-| Media/storage | Bounded ffprobe verification; staging-only upload grants and exact verified-byte server-only final publication | Enforces song limits and prevents a late reusable PUT from changing accepted content. Conditional copy/checksum behavior needs Railway tests |
-| Runtime operations | SSE heartbeat/reconnect/replay; configured PostgreSQL backups and optional pooling/PITR/HA | Railway edge timeouts and unmanaged database operations; add infrastructure only when measured needs justify it |
+| React | React Router, TanStack Query (no persisted or paused mutations), dnd-kit | Navigation, accepted server state, accessible ordering |
+| Go | pgx/pgxpool, sqlc, Goose, OpenAPI with oapi-codegen | Typed SQL, tenant and revision transactions, controlled migrations, a typed client |
+| Workers | River on PostgreSQL (**decided**, D-2) | Transactional jobs, enqueued in the same transaction as the change that needs them. Its retries and uniqueness don't replace the operation slot or the deletion sweep |
+| Installed apps | SQLite per account; file, grant, player-engine, background-transfer and secure-credential adapters; optional paid Capawesome plugins on mobile | Local songs, overlay, replica, pending work |
+| Web data | In-memory query cache only (R-WEB) | No persistent browser storage |
+| Media | ffprobe in workers; a client-side metadata extractor (S4) | Limits and verification |
+| Runtime | SSE with heartbeat, reconnect and replay | Railway edge limits. Database backups are deferred (D-16) |
 
-Keep Capacitor unless platform spikes show unacceptable limitations; React Native + Expo is an alternative mobile implementation with documented native audio, a changed UI layer and the same OS background constraints. Keep Gin and PostgreSQL: Chi is a handler-style preference, and MongoDB/Turso/server SQLite do not simplify this relational, online-only account model. First validate native file grants/playback/background reconciliation, immutable bucket publication and deletion cleanup; then select desktop packaging and prove event/session/restore behavior. Checklist items 5–9 remain open. See the full review for sources, comparisons and validation priorities.
+Keep Capacitor unless spikes S1 and S2 fail. The fallback is React Native with Expo, which has the same OS background limits. Keep Gin and PostgreSQL. The [2026-10-03 storage comparison](research/storage-and-database-research.html) is historical: its advice on streaming, deduplication and providers is superseded.
 
-## System at a glance
+### 4.2 System diagram
 
 ```mermaid
 flowchart LR
-    User["User signs in"] --> Client["React web or Capacitor app"]
-    Client --> API["Go Gin API"]
-    API --> PG["PostgreSQL catalog and configuration"]
-    Local["Selected local files or folder"] --> Import["Choose: copy to Songs or link origin"]
-    Drive["Selected Google Drive files"] --> Import
-    Import --> LocalIndex["Device-local location index"]
-    Import -. "online server acceptance" .-> API
-    Client -->|"explicit opt-in"| CloudSync["Optional cloud upload/sync"]
-    CloudSync --> Lake["Private per-user song bucket"]
-    Lake -->|"new device download"| LocalIndex
-    LocalIndex --> Player["Local-file player"]
-    PG --> Organization["Artists, manual playlists, groups of playlists"]
-    PG --> Outbox["Durable accepted-change outbox"]
-    Outbox --> Dispatch["Event stream and mobile push wake-ups"]
-    Dispatch --> Watcher["Device change listener and native background worker"]
-    Watcher -->|"read accepted catalog/manifest"| API
-    Watcher -->|"verify and reconcile managed Songs"| LocalIndex
+    subgraph Installed["Desktop / mobile app"]
+      LocalImport["Local import: link to source file"] --> LocalDB["Per-account SQLite: local songs, overlay, replica"]
+      LocalDB --> Songs["Song Sleeve folder (Songs mirror)"]
+      Songs --> NativePlayer["Local-file player"]
+      DSS["Device Sync Service"] --> LocalDB
+    end
+    Web["Web app: cloud-only"] -->|"add song = auto-sync"| API
+    LocalDB -->|"Sync to cloud: create track doc"| API["Go Gin API"]
+    Songs -->|"upload grant"| Staging["Bucket staging key"]
+    Web -->|"upload grant"| Staging
+    Staging --> Worker["Worker: verify + publish"]
+    Worker --> Final["Bucket final key"]
+    Worker -->|"set content id"| PG["PostgreSQL: tracks, organization, events"]
+    API --> PG
+    PG --> Dispatch["SSE + FCM hints"]
+    Dispatch --> DSS
+    Final -->|"download grant"| Songs
+    Final -->|"whole-song fetch"| Web
 ```
 
-## User flows
+<a id="repository-and-service-shape"></a>
 
-### Screen map and screen requirements
+### 4.3 Repository layout (proposed)
 
-The main signed-in experience uses a shared catalog, with navigation to Home, Library, Songs, Artists, and Profile. A persistent player bar is mounted in the signed-in app shell so it remains visible across page navigation. The full Playing screen opens from that bar and returns to the previous page without stopping playback. Start and authentication screens appear before the signed-in navigation. All lists load from paginated catalog endpoints and use stable IDs; the client keeps an offline cache where the screen needs it.
+```text
+apps/web            React + Vite (web build; also the UI bundled by desktop and mobile)
+apps/site           Public landing page (static, prerendered; no API client, R-SITE)
+apps/desktop        Desktop shell and native side (D-1)
+apps/mobile         Capacitor project + native plugins (android/; ios/ later, D-22)
+packages/core       TS application services: player controller, catalog store (replica + overlay merge),
+                    mutation client, Device Sync Service, local-song service
+packages/adapters   Interfaces + per-platform implementations: files/grants, local DB, player engine,
+                    credentials, background work, picker
+packages/api-client Generated from OpenAPI
+server/cmd/api      Gin API
+server/cmd/worker   Workers
+server/cmd/admin    Operator CLI (§10.5)
+server/internal/    accounts, devices, catalog, organization, operations, media, events, deletion
+server/db           Goose migrations + sqlc queries
+openapi/            API contract (source of truth)
+```
 
-| Screen | Requirements and behavior |
+Screens call the application services in `packages/core`; they never call platform APIs directly. Everything specific to installed apps (local songs, the overlay, `Songs`) sits behind adapters that the web build leaves out.
+
+### 4.4 Engineering conventions
+
+- **Error envelope:** `{ "error": { "code": "...", "message": "...", "details": {} } }`. The codes are a closed enum in OpenAPI. `connection_required` exists only on the client.
+- **Pagination:** cursor-based on the web. Installed apps render from their local replica, which holds the whole account.
+- **IDs:** UUIDv7. Timestamps are in UTC.
+- **Rate limits** are stored in PostgreSQL or Redis, never in process memory, because the API runs as multiple replicas. They apply to login, registration, password reset, password change, reauthentication and grant issuance.
+- **Client compatibility (F-5):** every request carries `X-Client-Platform` (`web`, `desktop`, `android`) and `X-Client-Version`. The server keeps a minimum supported version per platform (a server setting). An older client gets `426 client_update_required`, and the app shows **"Update Song Sleeve to keep syncing."** with the update action (auto-update, the `.deb` notice or the store/APK link, D-28). Installed apps keep playing and editing local songs while blocked. API changes are additive by default; a breaking change ships behind a new route version and raises the minimum only after the new clients are released.
+- **Untrusted media (F-12):** audio files are untrusted input.
+  - The worker runs ffprobe in a separate process on a temp file, with a 30 s timeout, a memory limit, no network and no shell; its JSON output is parsed strictly. A timeout or crash rejects the file as `invalid_audio_metadata`.
+  - Client metadata extractors read at most 16 MiB of tags, run off the UI thread (a web worker or the native side) with a timeout, and treat any parse failure as "no embedded value".
+- **Field limits (F-20):** names are trimmed, Unicode NFC-normalized, stripped of control characters and must not be empty. Maximum lengths: song name 200, artist 200, playlist 100, group 100 characters. The same limits apply to local songs. Count caps follow the scale target. Error: `invalid_field`.
+- **Scale target (D-33):** per account, up to **10,000 synced songs, 500 playlists, 100 groups and 5,000 songs per playlist**; an installed device also handles up to 10,000 local songs. These are enforced as caps (`limit_reached`) and tested at full size: snapshot paging, list virtualization, SQLite indexes, `queue-ids`, and a full folder check.
+- **Logging:** never log raw tokens, links, paths or file contents.
+- **Crash and error reporting (D-35):** Sentry (free tier) for the server, the web app and the installed apps. A shared scrubber removes song, artist, playlist and group names, file paths, emails, tokens and URLs before sending. Installed apps have **Send crash reports** in Settings (on by default, explained in the Privacy Policy). On the web there is no session replay and no offline event storage (R-WEB). The landing page has none (R-SITE).
+- **Observability:** structured logs with request IDs. Metrics for operation queue age, event lag, worker failures, stalled deletions and pending-track age. Alerts on stalled deletion or cleanup.
+- **Testing:**
+  - Go unit tests, plus integration tests against real PostgreSQL and MinIO.
+  - TypeScript unit tests for `packages/core`.
+  - Playwright end-to-end tests for the web and the desktop webview.
+  - Device test matrices for mobile.
+  - A set of audio fixtures at, just under and just over the limits.
+- **CI** runs on every PR: lint, typecheck, tests, an OpenAPI drift check and a migration dry-run.
+- **i18n (D-14):** all UI strings and email templates go through a translation layer from M0. Two locales ship: **English (`en`, the default)** and **Brazilian Portuguese (`pt-BR`)**. Dates, numbers and sizes are formatted for the active locale. User content (song, artist, playlist and group names) is never translated.
+
+---
+
+<a id="data-model"></a><a id="data"></a>
+
+## 5. Data model
+
+### 5.1 Server (PostgreSQL)
+
+Every user-owned table carries `user_id`, and relationships use composite `(user_id, id)` foreign keys (R-MUT-6). **No table stores anything about local songs.**
+
+**Accounts and devices**
+
+| Table | Purpose |
 | --- | --- |
-| Start | Public welcome screen with clear **Log in** and **Register** links. Successful login continues into Home; successful email verification returns to Login. |
-| Login / Register | One auth area with login and registration forms. Registration collects email and password, creates an unverified account, and sends a verification link/code. Show a pending-verification state with resend action; do not start an authenticated session until email verification succeeds. Login for an unverified address returns to that state. Add **Forgot password?** linking to the email recovery form. Successful verified login creates a server-revocable session valid for 30 days and persists it across app restarts. |
-| Password recovery | Request email from **Forgot password?** with a generic delivery response. The emailed HTTPS link opens a restricted reset page with New password and Confirm password fields. Validate its expiring single-use token before enabling submission; expired/used links offer a new request. Saving the password logs out every device, including the current session, and returns to Login without signing in automatically. |
-| Home | Three compact one-row previews titled **Songs**, **Groups**, and **Playlists**, each with a **See all** button. See all opens Library with the matching item type selected in its filter. Preview rows open the relevant song, group, or playlist. An **Add songs** link opens the shared **Add songs** import modal. |
-| Library | Grid of song, playlist, and group cards. The type filter has Songs, Playlists, and Groups all selected by default and supports any combination. Persist the selection as an account-level preference, sync it across devices, and apply it whenever Library opens. Changing the saved filter requires server acceptance. If disconnected, keep the last accepted filter, show a connection-required error, and do not queue the edit. Header actions **Create playlist** and **Create group** open name modals and save empty manual collections after server acceptance. |
-| Group detail | Header has a **Sync to cloud** action or sync-status indicator; clicking either opens the scoped sync modal for the group. Its scope is the union of songs in all playlists currently in the group, with duplicate tracks included once. Header menu edits the group name in a modal or deletes the group with confirmation. The content lists playlists in that group; each row has a drag handle at the start and a three-dot menu at the end with **Edit** and **Delete** actions, plus group-membership management. Edit opens the playlist-name modal; delete confirms removal of that playlist configuration, not its songs. Dragging changes order. Deleting a group removes its playlist associations while keeping playlists and songs. The sync modal also offers **Unsync and remove audio** with the scoped removal preview/confirmation; explain account-wide effects on songs shared with other collections. **Add playlists** opens a picker of existing user playlists; membership changes are explicit and never accept groups or individual songs. |
-| Playlist detail | Header has a **Sync to cloud** action or sync-status indicator; clicking either opens the scoped sync modal for all songs currently in the playlist. Header menu edits the playlist name in a modal, deletes it with confirmation, or opens **Add to other groups**. The content shows only songs belonging to this playlist, in its saved order. It uses the same song-row presentation and reorder/menu affordances as Songs, but the list is scoped to this playlist. Each row has a drag handle and three-dot menu at the end with **Edit** and **Delete** actions. Edit changes song metadata; Delete uses the song deletion confirmation and library-wide delete behavior. One playlist may belong to multiple groups. Deleting a playlist removes configuration/memberships, not song records or audio. The sync modal also offers **Unsync and remove audio** with the scoped removal preview/confirmation; explain account-wide effects on songs shared with other collections. **Add existing songs** opens a picker of songs already in the library; the user explicitly chooses additions/removals. |
-| Songs | The library-wide datalake view: it shows every song in the user's library, whether or not it belongs to a playlist. A **Sync to cloud** action or sync-status indicator in the page header opens the scoped sync modal for every song in the library. It uses the same song-row presentation as playlist detail, with name and optional artist, draggable library-wide ordering, and a three-dot menu. A displayed artist name links to its Artist page. Menu actions: edit name/artist, add to a playlist, delete, and resync. Edit lets the user add, change, or clear an optional artist using the same searchable select as import; existing user artists can be selected, and a new typed value creates/reuses a user artist on save. An **Add songs** link opens the same import modal as Home to import new songs into the library. Add-to-playlist opens a playlist picker. Delete requires confirmation and removes the track's app-managed audio, metadata, source/location records, playlist memberships, and any associated cloud object; if the song was linked to an external original, leave that source file untouched and explain this in the confirmation. Resync is a manual **Update source** action: open the platform file picker and reread the chosen file (even at the same path). Keep current name/artist in the inputs and offer the new filename/embedded title and optional artist as clickable suggestions. Confirmation refreshes validated duration, size, format, checksum, and audio reference; name/artist change only from the confirmed inputs. Update the same account-level track document and this device’s locator; other running devices receive dispatched changes through the Device Sync Service; deferred/offline devices catch up on resume/reconnect/open. Preserve current name/artist unless explicitly changed or artist is cleared. In copy mode replace the managed copy only after verification; in link mode update the linked reference. External file changes and startup checks never perform this metadata refresh automatically; synced replacements must verify the cloud copy before publishing the new generation. Synced song menus expose **Unsync and remove audio** with confirmation. After unsync, retain each row with a **Needs source** warning and **Select local file** / **Delete track** actions; disable playback until a playable source is selected. |
-| Artists | Shows the user's artist entries. Opening an artist shows the songs assigned to that artist across the library, using the same song rows, ordered consistently with the library. This is a dynamic view based on artist assignment, like a playlist view, but it includes only songs referencing that artist and does not create playlist memberships or move/copy audio. Song artist names link to this page. |
-| Persistent player bar | Fixed at the bottom of every signed-in page, above bottom navigation/system safe areas where present. Shows the current song's small square placeholder cover with a centered song icon, title/optional artist, and compact play/pause control. Tapping the bar opens the full Playing screen. The playback controller and active media element live above route-level pages, so navigating does not stop or reload the song. |
-| Playing screen | Full player view opened by tapping the player bar. Show a square cover placeholder with only a centered song icon; real cover-art lookup/display is future scope. Show song name and optional artist above a seekable progress bar, with live current elapsed time at the left and total duration at the right. Drive position/duration from the active media element, update elapsed time during playback, and disable seeking until duration is known. Provide play/pause, previous, next, shuffle, and repeat controls. Shuffle toggles randomized queue order while preserving the current song; repeat toggles repeat-current-song only. It automatically turns Off whenever the current song changes, including selection, previous, or next. Previous/next are disabled when the current playback queue has no corresponding song. A three-dot menu at the top exposes the same song actions as Songs: edit name/artist, add to playlist, delete, and resync. Song metadata actions reuse their existing editors/confirmations; deleting the currently playing song stops it and removes it from the queue. The menu includes confirmed **Unsync and remove audio** for synced tracks. On confirmed account deletion, stop playback immediately and release its resource for permanent local cleanup. If a sync update or unsync arrives during playback, keep playing and show the pending-change notice; replace/remove that resource only after playback finishes or the user stops/switches away. |
-| Profile | Shows account email and counts of songs, playlists, and groups created. Lists active signed-in devices/sessions with platform/device label and last-active time. Each session can be logged out individually; also provide **Log out all devices** and a distinct **Log out current session** action. Confirm actions that revoke other devices. Logging out the current session clears local credentials and revokes its server session. Add **Delete account**: show irreversible-removal consequences, require the current password/recent reauthentication, then a final **Permanently delete account** confirmation. After server acceptance, show deletion/cleanup progress outside normal signed-in navigation; no cancel or recovery action is available. |
+| `users` | Normalized unique email, argon2id password hash with its parameters (R-AUTH-9), `terms_accepted_at` and `terms_version` (R-AUTH-10), `locale` (`en` default, or `pt-BR`), deletion gate, `suspended_at` (§10.5), `cloud_sync_enabled` (R-CLOUD-8), `storage_quota_bytes` (default 25 GiB; effectively 0 without sync), `storage_used_bytes`, `storage_reserved_bytes` (both maintained transactionally, R-LIM-5) |
+| `password_reset_tokens` | Hashed, expire after 30 minutes, single-use; a new request invalidates earlier ones |
+| `reauthentication_proofs` | Hashed, single-use, valid 5 minutes; bound to one session and to the `delete_account` purpose |
+| `devices` | Installation ID, platform (`web`, `desktop`, `android`; `ios` reserved for later), label, last seen. Installed apps generate their ID once and keep it in the account namespace. The web stores nothing, so the server creates a `web` device at each web login, labels it from the browser and OS, and binds it to the session; `GET /me` returns it (F-25) |
+| `user_sessions` | Token hash, `device_id`, created and expires (absolute 90 days), last active, revoked |
+| `device_push_registrations` | FCM token bound to a device and session (APNs later, with iOS); rotation and invalid-token state |
+| `email_jobs` | Delivery and retries until the token expires; encrypted transient link material; provider idempotency key |
+| `admin_actions` | Audit log of operator commands (§10.5) |
+| `account_deletion_requests` | The irreversible request, the opaque original account UUID, phase and checkpoints. Not cascaded with `users`; only a minimal ledger remains afterwards |
+| `account_deletion_work_items` | Temporary inventory and checkpoints; scrubbed when deletion finishes |
+| `device_cleanup_receipts` | Device and account UUID, cleanup-credential hash, deletion reference, acknowledged state. Survives the sessions and the user row |
 
-When playback starts from a song list, initialize the player queue from that list's current order (library order on Songs, playlist order on Playlist detail, and matching artist songs on an Artist page). Keep the queue, current playback position, shuffle setting, and repeat mode in the app-level player state while the user navigates. The mini-player and Playing screen observe the same player state and control the same media instance. If there is no current song, show the empty player state and disable playback, seek, previous, next, shuffle, and repeat controls.
+**Catalog and organization (synced songs only)**
 
-Drag ordering must be keyboard/touch accessible as well as pointer driven. Persist song-library order, playlist-song order, and group-playlist order separately so changing one view does not reorder the others. Allow temporary drag previews, but persist/apply the final order only after an authenticated server response accepts the write. On server unavailability or rejection, restore the last accepted order and show an error; do not queue an offline reorder. Publish accepted order changes through the change log.
-
-### Online-only changes and server acceptance
-
-Every user change to account/library data requires a live authenticated connection and an accepted Gin API result. This applies to creating/importing tracks, editing name/artist, selecting/relinking a source, deleting tracks, creating/editing/deleting playlists/groups/artists, changing memberships or order, saved Library filters, and cloud-sync/unsync preferences. It applies equally to synced and unsynced songs: keeping audio local does not make its account document editable offline.
-
-| Situation | Required behavior |
+| Table | Purpose |
 | --- | --- |
-| Server unreachable before submission | Display `connection_required`: **“Connect to the server to make changes. This change was not saved.”** Keep the last accepted catalog, source mapping, files, memberships, and preferences unchanged. Do not create a client mutation queue or automatically submit the attempted edit after reconnect |
-| Client appears online | Confirm through the actual authenticated API request; Wi-Fi/network indicators alone do not establish server connectivity. Keep edits as unsaved form input and show progress until the request is accepted. Do not optimistically replace catalog values or persist a final drag order |
-| Server accepts a write | Authenticate ownership, check the expected entity/list revision and constraints, then commit the mutation, request receipt, and change/outbox event together. Return the accepted document/revision or server job ID. Only accepted documents update the cache; an accepted queued media job still shows pending operation progress until the source/content change is committed |
-| Server rejects the write | Return the relevant authorization/validation/stale-revision error. Leave accepted local state unchanged; refresh stale data and require a new deliberate user confirmation. The server must never blindly apply an outdated client document over its newer revision |
-| Connection drops during an already-submitted request | Show **“Could not confirm this change. Reconnect to check its status.”** The server may have committed before the response was lost, so do not claim it rolled back. Keep its request ID for status lookup, for example `GET /me/mutations/{requestID}`; reconcile the accepted result after reconnect without creating a new source submission. An unknown result is status-recovery work, not an offline edit waiting to be executed |
-| Read/playback while disconnected | Browse the cached server-accepted library and play readable local files; play/pause, seek, next/previous, shuffle/repeat, and navigation remain local controls. Account edit/import/source-save/delete actions are unavailable and show the connection-required notice. Passive file-health checks and device application/cleanup of previously accepted server events can still run |
+| `tracks` | The R-ID-1 document, plus `created_at` (when it was first synced; Home's "newest first", D-36), `state`, `current_content_id` (null while pending), `origin_device_id`, `library_position`, `revision`, `pending_since` |
+| `track_content` | Immutable content: ID, track ID, SHA-256, bytes, duration, format, `object_key`, and `state` (`candidate`, `current` or `retired`). Candidate and retired rows exist only until cleanup |
+| `artists` | Display name and normalized name; the normalized name is unique per user |
+| `playlists`, `playlist_items` | Manual playlists with `created_at`. Items reference **synced** tracks only, with a `position`; each `(playlist, track)` pair is unique |
+| `groups`, `group_playlists` | Manual groups with `created_at` and a `position` per playlist; each `(group, playlist)` pair is unique; no parent column |
+| `library_view_preferences` | The `songs`, `playlists` and `groups` booleans; at least one is true |
+| `sync_scopes` | Unique per `(user, type, collection)`; `enabled` or `paused`. Devices read these to auto-sync their local songs |
 
-When the server is unreachable, it cannot return an HTTP response; the client reports the failed connection locally. The enforcement is that no account write is valid without server authorization/commit, and no corresponding new local catalog/source change is applied before acceptance. Form typing, file-picker review, and a temporary drag preview are uncommitted input, not saved edits. Staged files must stay outside the active managed source and are cleaned up on rejection/cancel; do not delete the current content or install replacement audio for an unaccepted source action.
+**Mutations, operations and events**
 
-Disabling offline writes removes offline edit merging. Concurrent online clients can still submit stale revisions, so Gin services perform atomic revision checks/short database transactions and reject stale writes instead of silently overwriting another device’s accepted change. The existing per-user/track operation slot separately serializes media transfers/source replacements. Every deliberate user action has a request ID; a receipt for an already-accepted ID returns that action’s result, while a genuinely new source-file action creates new content even for identical bytes. Reconnect performs catalog/event catch-up and online-request status recovery only; it never replays edits attempted while disconnected.
-
-Server event outboxes, server-accepted sync jobs, device cursors, staged downloads, and playback-deferred local cleanup remain necessary. They deliver work that was already authorized online; they are not an offline user-mutation queue. Enforce same-user ownership in Gin and PostgreSQL relationships so tracks, artists, playlists, groups, memberships, jobs, and objects cannot cross account boundaries. Detailed receipt retention, schema constraints, and cursor/delivery recovery remain checklist item 6.
-
-### Authentication and library API flows for these screens
-
-The Gin API owns registration, email verification, login, and session revocation. Suggested routes are `POST /auth/register`, `POST /auth/email/verify`, `POST /auth/email/resend`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/password/forgot`, `POST /auth/password/reset/validate`, `POST /auth/password/reset`, `POST /auth/reauthenticate`, and `POST /me/account-deletion`. Restricted post-logout cleanup uses `POST /account-deletion/status` and `POST /account-deletion/ack` with a device-cleanup credential, not a normal session. Registration normalizes and uniquely indexes the email, stores a securely hashed password, creates an unverified account, and queues a one-time verification email. Store only a hash of the random verification token; expire and consume it once. Rate-limit registration, verification resend, and login attempts. Do not issue a normal session until the email is verified; return a specific `email_verification_required` response for an unverified login. The verification page should confirm the address then let the client exchange the token, without exposing credentials in logs or analytics.
-
-Issue a cryptographically random opaque session credential with a **30-day absolute validity** and keep only its verifier/hash in `user_sessions`; Gin checks session expiry, revocation and the account deletion gate on every authenticated request. Web stores it in a Secure HttpOnly cookie; installed clients use the native secure credential store. No recurring login is required within that valid session unless explicitly revoked. The API supports `GET /me`, `GET /me/summary`, `GET /me/sessions`, `DELETE /me/sessions/{sessionID}`, `POST /me/sessions/revoke-all`, and current-session logout. `/me/summary` supplies profile counts; session routes revoke one device, all devices, or the current session. See the Authentication and security lifecycle rules for recovery and deletion.
-
-Library APIs supply paginated songs, groups, playlists, group playlists, playlist songs, and artists. Mutating routes require an authenticated online request, expected revision, and unique request ID; reject stale revisions and return the accepted result/receipt. Clients apply no edit or active source before acceptance and never replay disconnected attempts. Use reorder operations for `/me/library/songs/order`, `/playlists/{playlistID}/songs/order`, and `/groups/{groupID}/playlists/order`; each write stores the order and appends a change-log record. Add manual playlist/group creation, rename/delete, playlist-song membership and playlist-to-group association endpoints. Enforce the fixed child types and same-user relationship constraints; reject parent-group or rule-generated collection payloads. `GET/PUT /me/preferences/library-view` reads/writes the account-level filter booleans (`songs`, `playlists`, `groups`) so all devices show the same Library view. `GET /me/artists` lists/searches the user's artists; `/me/artists/{artistID}/songs` supplies the Artist page. Import and source-replacement routes enforce the approved per-song duration/byte limits and return the exceeded-limit error before accepting a new document/content reference; cloud verification rechecks the actual object before publication. Track import/edit endpoints accept a nullable `artist_id` or a typed artist name, and create-or-reuse the normalized artist and update the track in one transaction. Enforce same-user ownership with a composite user/artist reference. Track delete, explicit metadata edits, and confirmed source-refresh operations are authenticated and ownership-checked. Read responses include the complete authoritative track document for synced and unsynced songs; accepted writes update its revision and change log. External file observations are device health only, not track-update requests. File selection and local path updates stay on the client. See the Data model update rules for metadata-only edits and verified replacements. Use cursor pagination and search rather than returning the full catalog for Home or Library. Provide a separate account catalog change feed (for example, `GET /me/catalog/changes?cursor=...`) covering every track, synced or unsynced. Running clients apply accepted revisions through the Device Sync Service; mobile background handlers reconcile while permitted, and deferred/offline clients catch up on resume/reconnect/open. Cloud manifest/download readiness remains separate.
-
-Cloud-sync APIs expose scope status, enable/disable operations, and a confirmed sync operation for `library`, `group`, or `playlist` (for example, `GET /me/cloud-sync/scopes/{type}/{id}/status`, `POST /me/cloud-sync/scopes/{type}/{id}/sync`, and `DELETE /me/cloud-sync/scopes/{type}/{id}` to stop future auto-sync). The server resolves scope membership at confirmation, verifies ownership, deduplicates track IDs, records a membership snapshot in a durable job, and stages one cloud object for each current content version. Desktop/native clients first ensure the selected bytes exist as a verified local `Songs` file, then upload that exact version directly using short-lived grants; web uploads its selected source directly. The API never receives audio. After verification, the server marks the cloud copy ready and publishes the new manifest; native/desktop clients download the file into their local `Songs` directory, and web can fetch it when selected. The native/desktop playback source remains the local `Songs` file throughout. Return per-track cloud upload status and job progress so indicators show **Not synced**, **Syncing**, **Synced to cloud**, or **Needs attention**; separately show desktop/native `Songs` directory readiness/download status. Keep retries idempotent and publish manifest changes through the change log. Pausing a scope stops future automatic uploads but preserves existing cloud copies. Explicit unsync uses separate preview/confirm operations, for example `POST /me/cloud-sync/unsync/preview` and `POST /me/cloud-sync/unsync/confirm`, accepting a track, playlist, group, or library scope. Confirmation checks ownership and the previewed membership/source revisions, preserves track documents, suppresses reupload, and records media-removal work and change events; it never reuses the pause endpoint for deletion. Installed desktop/native clients use an authenticated, cursor-paginated manifest endpoint such as `GET /me/cloud-sync/manifest?cursor=...` to list synced track/content-version IDs, size, checksum, changed/deleted state, and the next cursor. The manifest does not expose permanent bucket credentials or object keys. The client compares it to its local `Songs` index and requests short-lived download grants only for missing or changed versions; this is a metadata reconciliation, not an audio fetch until an item needs installation. Web uses catalog metadata and asks for a short-lived read grant only for the selected song. Every per-track mutation/transfer uses the shared sync-operation coordinator. Return an operation ID with waiting/active/completed status (for example, `GET /me/sync/operations/{operationID}`); issue a direct transfer grant only to its active owner. Expose authenticated accepted-change/completion events through `GET /me/sync/events` with replay cursors and session-owned push-registration routes for APNs/FCM background wake-ups. Clients stage notified updates and defer changing a currently playing resource until playback ends.
-
-### Import from a source
-
-1. The user signs in and opens the shared **Add songs** import modal from either Home or Songs. The modal imports new songs into the library.
-2. A file-picker control accepts individual files or folders from the selected local source (and the corresponding file/folder picker for connected Google Drive). Recursively inspect folder selections where the platform permits it, keep supported readable audio/song files only, and report skipped unsupported or unreadable items. Append new selections to a review list; let the user remove one item, remove all items, or add more files/folders without losing the current selection.
-3. Show each selected song as an editable row with **Name** and optional **Artist** inputs. Pre-fill Name from the embedded title or filename (without extension); Artist is blank by default and is never required. If the candidate name contains a hyphen, split once and trim whitespace; offer the non-empty second part as a clickable artist suggestion below the Artist input, but do not assign it automatically. Clicking the suggestion fills the Artist field. Artist is a searchable/selectable control showing artists already in this user's library; a newly typed value is offered as a create-new artist choice. Create or reuse that user-owned artist only when the import/save is committed. Selecting an existing artist or creating one links the song to its artist record. The user can edit any row before import.
-4. Before import, the user chooses one of two local handling modes for the selected songs: **Copy into Song Sleeve** or **Keep in original location**. Copy mode duplicates each selected local song into the app-managed `Songs` directory so it remains available if the original moves. Link mode records the selected source URI/path and plays from that location without copying. Show this warning before confirming link mode: “If you move or rename a linked song, Song Sleeve may lose access. You will need to relink/resync it from the new location.” Google Drive selections are downloaded into `Songs` for offline playback because remote streaming is out of scope.
-5. Validate selected files against the [approved song limits](#approved-song-limits): duration must be at most 30 minutes and actual file length at most 128 MiB, across local/Drive imports and both copy/link modes. Flag invalid rows with the exceeded limit; they cannot be submitted. Reject unknown/invalid technical facts until extraction succeeds. Extract technical metadata/checksum for review; Name and optional Artist inputs remain uncommitted form values. Stage copy-mode files temporarily and verify them, but do not create a playable library entry or install an active `Songs` source before the server accepts import. Link mode keeps the selected locator pending. Any origin/provider label is provenance, not another playback source. No audio is uploaded to Railway unless cloud sync is explicitly enabled; device-only paths never go to the API.
-6. Submit the import to Gin while connected and authenticated. Only after server acceptance creates the authoritative track/content document does the client cache it and atomically install the verified copy in `Songs`, or activate the chosen linked locator. If offline/unreachable, return a connection-required error and leave the library/current source unchanged; discard or clean up uncommitted staging. No offline import record or later replay is created. Local installation failures after server acceptance are shown as device readiness errors. The server never receives the absolute path.
-7. Audio stays local unless the user confirms a cloud-sync scope on Songs, a group, or a playlist. A confirmed scope uploads eligible content through short-lived grants; on desktop/native the local `Songs` file is verified and installed before its bytes are uploaded, then the worker verifies the cloud copy. Future songs entering that saved scope are queued automatically. The bucket stores cloud-enabled content versions under one flat logical prefix such as `users/{userID}/songs/{contentVersionID}`. No cloud object is created for songs outside enabled scopes.
-8. On another installed desktop/native device, startup reconciliation downloads missing or changed synced songs into its shared app-managed `Songs` directory and verifies them. That file is the playback source; the cloud object is only the synchronization copy. The web app syncs song metadata only; when the user plays a cloud-synced song, it fetches that complete song from the bucket into one active Blob-backed browser media resource, plays it, then clears the old resource, revokes its object URL, and releases references when another song is requested. Web audio is not saved persistently unless the user explicitly chooses **Download for offline**. Local-only songs are not transferred to another device unless uploaded or imported there again.
-
-Import handling selects the one active local source for an unsynced track: the managed `Songs` copy or the linked original location. The device keeps that locator because absolute paths, Android content URIs, and iOS security-scoped URLs are device-specific; PostgreSQL stores no device locator. Drive imports use the downloaded `Songs` copy as their active local source, with Drive identity kept only as provenance. Once a cloud upload is verified, installed desktop/native clients reconcile a local copy in `Songs` and play that file; the web fetches the cloud content on demand. Reconcile the active local file and cloud-synced `Songs` directory when the app opens. Do not delete an external original file during import or source transition.
-
-### Organize music
-
-Songs are organized **only by artists, playlists, and groups**. The user explicitly creates each playlist/group, chooses its name, adds/removes its members, and sets its order. A playlist contains only songs; a group contains only playlists. Groups cannot contain groups or direct song entries, and playlists cannot contain other playlists/groups. There are no smart playlists, smart groups, recursive collections, or membership rules that infer organization from file metadata or other conditions.
-
-| Organization | Manual user action and stored relationship |
+| Table | Purpose |
 | --- | --- |
-| Artist | Select an existing artist or type and confirm a new artist in the song/import editor. Artist is optional and blank by default. Suggestions never assign/create one without user confirmation; `tracks.artist_id` stores the explicit assignment |
-| Playlist | **Create playlist** opens a name modal; confirmation creates an empty manual playlist. The user adds/removes song references through Add to playlist or playlist membership controls; `playlist_items` stores the chosen songs and playlist-specific order |
-| Group | **Create group** opens a name modal; confirmation creates an empty group. The user selects existing playlists to add/remove; `group_playlists` stores the chosen playlists and group-specific order. The picker lists playlists only |
+| `mutation_receipts` | Unique per `(user_id, request_id)`; status, result reference, optional `operation_id`; kept 90 days (R-SYNC-5) |
+| `track_sync_operations` | The queue and active slot per track: a partial unique index allows one active row per `(user_id, track_id)`. Columns: kind (`initial_upload`, `replace`, `delete`), request ID, owner device, candidate content, staging key, grant expiry, heartbeat, confirmed bytes, last progress time, state |
+| `account_events` | Per-user monotonic cursor; entity type and ID, revision, event type, `dispatch_state`. Retention per D-15 |
 
-Expose Create playlist/Create group in Library and reuse the collection name/membership editors on detail pages. Creation, membership changes, artist assignment and reorder require authenticated server acceptance under the existing online-only/revision rules. Importing a song never creates a playlist/group or assigns it to one implicitly. A track may belong to multiple playlists and a playlist may belong to multiple groups; sharing references does not duplicate audio or create a hierarchy.
+### 5.2 Device-local
 
-Audio is identified by the track's current content ID, independently of organization. Native/desktop synced playback still uses local `Songs`; changing a collection never moves the file. An Artist page queries songs with the user-confirmed `artist_id`, using library order. It is a view of explicit assignments, not a rule-generated playlist or separate membership model. The saved Library Songs/Playlists/Groups checkboxes control visible card types only and do not add a saved collection or membership rule.
+**Installed apps keep one SQLite database per account (R-OWN-3):**
 
-Gin exposes manual collection create/edit/delete and membership operations, for example `POST /me/playlists`, `POST /me/groups`, playlist-song add/remove and group-playlist add/remove. Validate payloads as track IDs for playlist membership and playlist IDs for group membership; reject unsupported child types, parent-group fields and rule-based collection definitions. Keep `playlist_items` and `group_playlists` as separate same-user relations with composite ownership foreign keys and unique membership keys. Do not add group-to-group relations, playlist-to-playlist relations, parent-group IDs, collection rule/type fields, or a rule-evaluation worker.
-
-Deleting a playlist removes its membership/configuration and references from groups, preserving songs. Deleting a group removes its playlist associations, preserving playlists and songs. Explicit song deletion retains the library-wide behavior already specified. Saved cloud-sync scopes can automatically queue uploads for newly added members after the user changes membership; they never create collections or infer/change organization.
-
-### Optional cloud sync and local playback
-
-Cloud audio upload is opt-in, not a prerequisite for using the player. The user starts it from the **Sync to cloud** action on Songs, Group detail, or Playlist detail. Each page header always shows the action or its current sync-status indicator; clicking either opens the same sync modal with that page's entire scope preselected. The Songs scope is every track in the datalake; a playlist scope is every track in that playlist; a group scope is the deduplicated union of tracks in all playlists currently in that group. The modal shows the scope name, selected song list/count, already-synced items, items to upload, items unavailable on this device, and progress/estimated transfer size where available. Before materializing/uploading an unsynced file, compare its actual size/checksum with the accepted track document. A mismatch remains in **Needs attention** until the user manually confirms **Update source / Resync**; a saved scope never adopts external file changes automatically. Confirming explicitly opts that scope into cloud sync and creates a durable job. On desktop/native, first materialize each selected linked or managed source into a temporary file in local `Songs`, verify it, atomically install it, and upload those exact bytes through a direct-to-bucket grant. Local `Songs` is then the playback source. On web, upload from the selected source without downloading the library. Existing ready cloud objects are skipped, while installed clients still ensure their local `Songs` copy matches the ready version. Missing/unreadable local sources remain in **Needs attention** with a relink/resync action; failures remain retryable. A signed-in desktop/native device uploads only tracks it can first materialize and verify in local `Songs`; web uploads from its selected source. After cloud verification, installed clients keep that same version in local `Songs`. The cloud indicator progresses through **Not synced**, **Syncing (x/y)**, **Synced to cloud**, or **Needs attention**; show per-song cloud status in the modal. Installed desktop/native clients separately report whether their local `Songs` file is current. A synced indicator remains clickable to review cloud status and retry missing/changed uploads. Native/desktop local download status is shown separately and updated by startup reconciliation.
-
-Persist the confirmed selection as a cloud-sync scope: future songs added to the library, playlist, or group are queued automatically while that scope remains enabled. A device with the readable active local file supplies upload bytes; if none can access it, the track stays in **Needs attention** until relinked or otherwise made readable. A song entering multiple enabled scopes still has one current cloud object for its current content version, and upload jobs deduplicate by content-version ID. Removing a song from a playlist/group does not delete its cloud object, since the same track may be used elsewhere; deleting the song itself follows the existing explicit track-delete flow. Pausing a scope stops future automatic uploads for that scope but does not delete existing cloud copies; **Unsync and remove audio** explicitly removes its affected synced songs and their managed mirrors. This feature syncs audio bytes only after the user's confirmation; catalog and organization metadata continue to sync separately.
-
-Desktop/native apps create the managed `Songs` directory if needed and reconcile the cloud manifest at every app open, downloading missing/changed synced songs; playback always uses that local directory. The web app syncs catalog metadata without fetching the full audio library. When the user plays a cloud-backed song on web, request an authorized URL, fetch the complete selected track as one Blob-backed active media resource, wait for the fetch to finish, then begin playback. Use an object URL rather than copying the whole payload into an additional JavaScript `ArrayBuffer`. Keep that resource until another song is requested; stop playback, clear the prior media source, revoke its object URL, release references, and load only the newly requested track. Do not prefetch the playlist or retain cloud audio after playback. This is whole-track loading, not progressive streaming.
-
-Keep audio local by default. Confirming a scope from Songs, Group detail, or Playlist detail is the explicit opt-in for that collection, and saved scopes queue future songs entering them. The sync modal has separate **Pause automatic uploads** and **Unsync and remove audio** actions. Pause retains copies; confirmed unsync removes cloud audio and app-controlled mirrors and leaves tracks needing a local source. Catalog and playlist configuration sync as lightweight records independently of song bytes. Show upload/download progress, storage estimates, failures, and paused states. Web playback shows loading progress and starts only after the selected track is fully fetched. Switching tracks waits for the next full fetch, so the UI must show that loading state; gapless playback and crossfade are not promised. Limit web playback to one active track resource: do not preload other tracks; cancel an in-flight load on track switch and release the prior Blob/object URL and references. The [approved song limits](#approved-song-limits) are 30 minutes AND 128 MiB on every client; reject over-limit imports/replacements and enforce the byte limit during web downloads. Browser resource tests still validate reliable behavior within these product limits. A full track can still pressure browser memory even as a Blob, and browsers may back Blob data differently; verify memory behavior on supported browsers, and handle fetch failure, memory pressure, and rapid track switching. Web cloud playback requires a network connection unless the user explicitly downloads the track for offline use into OPFS; browser quota and eviction limits still apply.
-
-### Serialized sync and device notifications
-
-The server permits only one active sync operation for each `(user_id, track_id)`. Use the stable track ID for this key, never the replaceable content ID, so different devices or a newly selected binary cannot bypass the rule. Different songs can sync concurrently. Playback of an already-local song does not acquire this server slot.
-
-| Concern | Design rule |
+| Table | Purpose |
 | --- | --- |
-| Operations covered | Cloud upload, confirmed source/content replacement, unsync/removal, and server-coordinated cloud download/restore all acquire the same user/track slot. Metadata-only edits do not require an audio-transfer slot and must not be overwritten by a later transfer completion. Requests from every device and every overlapping playlist/group job use it. Same-track cloud downloads to different devices therefore run in order, not concurrently |
-| Overlapping requests | Never start a second operation or issue its transfer grant while the slot is occupied. Attach network retries with the same request ID to that operation; equivalent scope requests delivering the same already-accepted content can share it. Each new user source-file submission has a distinct request ID and creates a fresh content entity, regardless of equal checksums; queue distinct requests and return waiting/active status. A device keeps its outstanding request ID instead of starting another request for each notification. The UI shows **Waiting for another sync operation** rather than starting parallel work |
-| Scope jobs | Freeze the confirmed song set and create scope-job items referencing per-track operations. Shared songs use the same operation coordination. Waiting on one song does not block unrelated songs in that playlist/group |
-| Durable coordination | PostgreSQL stores operation records and enforces one active slot per user/track across all API/worker replicas. Acquire/release it in short transactions; keep ownership/heartbeat state during transfer instead of holding a database transaction open across the network. Grant requests and completion callbacks must match the active operation and its content/source revision |
-| Completion and recovery | Validate the result, commit its accepted catalog/manifest change and notification-outbox event, then release the operation slot when server transfer/cleanup work is complete. Before starting a queued request, recheck its source revision, scope preview, ownership, and sync preference. A stale mutation needs attention/reconfirmation; it must not change newly replaced or unsynced content. Supersede stale read/restore requests and reconcile the latest approved generation rather than ask the user to confirm a routine download. On failure, retry or cancel the same operation before permitting another; do not simply expire a lock and launch overlapping transfers |
+| `catalog_replica` | Accepted server data: tracks, artists, playlists, groups, memberships, preferences, scopes, plus the catalog cursor |
+| `local_songs` | Local ID, `added_at` (import time; Home's "newest first", D-36), name, artist name, optional matched `artist_id`, duration, bytes, format, SHA-256, source locator (desktop path or Android SAF URI in device storage, never inside `Songs`), access grant, observed stats, health, `library_position`, `sync_state`, `syncing_track_id` |
+| `local_playlist_items` | Overlay entries: `playlist_id` (server ID), `local_song_id`, `position` |
+| `synced_files` | One row per synced track: installed content ID, relative `Songs` path, readiness, staged content, playback pin. Mirrored into the folder manifest (§7.13, D-29) |
+| `pending_work` | Accepted events still to apply or clean up, the sync queue (R-CLOUD-9), OS background-task IDs |
+| `outstanding_requests` | Request IDs whose result is unknown (R-MUT-4). This is not an edit queue |
+| `player_state` | Queue, position, modes |
 
-Each completed operation generates a durable per-user event containing its operation ID, track ID, accepted document/source revision, current content reference or missing-source state, event type, and replay cursor. Accepted in-app metadata, organization, membership/order, and saved-preference edits also publish catalog events, for synced and unsynced tracks alike. Non-track events identify their affected entity and revision without requiring a track ID. Dispatch accepted changes to all authorized devices: an authenticated event stream (for example `GET /me/sync/events`) serves running clients, and mobile push wake-ups reach native background handlers. Keep bucket credentials, absolute paths, and permanent object URLs out of these messages; push carries only an opaque change-available hint, not trusted catalog data. Device download-completion events carry the installed content ID/device identity and do not create a new account content generation or force other devices to download unchanged audio.
+The `purge_pending` checkpoint and the cleanup credential are stored outside the account database. The session is kept in the OS secure store.
 
-Persist the change and outbox event in the same database transaction so a process crash cannot publish an uncommitted change or lose its notification. Dispatch/retry a sync-completion event only after commit and after its operation reaches completed; pending/failed operations report progress instead of announcing completion. Metadata-only catalog events can dispatch immediately after their accepted write. Clients ignore duplicate/older revisions and reconcile against the current catalog/manifest rather than blindly replaying outdated file operations. A minimized device must start reconciliation on receipt while execution is available, rather than deliberately waiting for the user to reopen it. Native wake-up/transfer adapters support background work when the OS allows it. Suspended, offline, or missed-delivery devices catch up from their saved cursor on the next permitted background execution, resume, reconnect, or app open. Realtime and background delivery complement required startup reconciliation; neither replaces it.
+**The web** stores nothing on the device (R-WEB). It keeps the catalog, outstanding request IDs and player state in memory only; the session is a cookie. After a reload it refetches the catalog, including syncing songs and their progress.
 
-The server notifies devices; each client’s storage adapter performs the actual update to its own app-controlled `Songs` directory. Installed clients request a queued per-track download operation only for missing/new content, verify the file into staging, and update the local mapping when safe. Web still downloads only a selected whole song and never mirrors the entire library. A client acknowledges transfer completion after verification; waiting to replace a currently playing local file is separate device application state and does not hold the server slot for the duration of playback. Every client records **Received**, **Staged / awaiting playback end**, or **Applied** locally so a completed cloud operation is not mistaken for every device already having the new file.
+---
 
-The existing idempotency, expiry, removal markers, and orphan cleanup remain necessary for process failure and stale transfer capabilities, even with serialization. An aborted/abandoned operation cannot release permission for another same-track transfer until its issued capabilities are expired or safely retired; do not assume a signed storage URL is instantly revoked by changing the database slot. Final lease/grant timeout values and cleanup/recovery mechanics remain checklist item 5.
+<a id="authentication-and-library-api-flows-for-these-screens"></a>
 
-### Device change listener and background synchronization
+## 6. API
 
-Each signed-in installation has one **Device Sync Service**, independent of screens, routes, and the player. It watches server-dispatched accepted changes, updates the cached catalog/configuration, and reconciles managed audio. Opening another page or minimizing the app must not intentionally stop this service. A native worker can operate without the React interface executing; a React timer or a permanently connected WebView socket alone is not the background implementation.
+All mutating routes require an authenticated session, an expected revision where one applies, and an `Idempotency-Key` request ID (R-MUT-3). Responses return the accepted document and revision, or an operation ID.
 
-The required flow is: **desktop change accepted/completed → durable server event → device event stream or mobile wake-up → authenticated catch-up → local catalog update → reconcile `Songs`**. A metadata-only rename changes the document/display without downloading audio or renaming its content-ID file. A verified synced source replacement schedules the new content download, verifies staging, and installs it when safe. Unsync/deletion schedules controlled-copy cleanup. An unsynced source change updates the account document but cannot fetch another device’s private original; show source readiness/relink status where appropriate.
+**Auth**
 
-| Device state | Listener and update behavior |
+- `POST /auth/register` (signs in on success; takes the chosen `locale` and the accepted `terms_version`)
+- `POST /me/terms` (accepts a new terms version, R-AUTH-10)
+- `POST /auth/login`, `/auth/logout`
+- `POST /auth/password/forgot`, `/auth/password/reset/validate`, `/auth/password/reset`
+- `POST /auth/reauthenticate`
+- `POST /me/password` (current and new password; R-AUTH-8)
+
+**Me, sessions and devices**
+
+- `GET /me` (includes `cloud_sync_enabled` and the session's `device_id`), `PATCH /me` (language: `en` or `pt-BR`), `GET /me/summary` (synced counts, storage used, reserved and quota)
+- `GET /me/sessions`, `DELETE /me/sessions/{id}`, `POST /me/sessions/revoke-all`
+- `PUT /me/devices/{deviceID}`, `PUT/DELETE /me/devices/{deviceID}/push-registration`
+
+**Account deletion**
+
+- `POST /me/account-deletion`
+- Restricted to the cleanup credential: `POST /account-deletion/status`, `POST /account-deletion/ack`
+
+**Policy:** `GET /media-policy`
+
+**Tracks**
+
+- `GET /me/tracks?cursor&q` returns ready and syncing tracks; syncing ones carry their operation's progress.
+- `POST /me/tracks` starts a sync. It takes metadata, position and memberships, and returns a pending track and an operation.
+- `PATCH /me/tracks/{id}` changes name and artist.
+- `POST /me/tracks/{id}/replacement` takes the chosen metadata and returns an operation.
+- `DELETE /me/tracks/{id}` takes a `reason`: `delete` or `cancel_pending`. Any device may cancel a pending track; that fails the sync (R-ID-4).
+- `PUT /me/library/songs/order`
+- `GET /me/queue-ids?source=library|playlist:{id}|artist:{id}` returns the ordered track IDs of a whole list in one response, so the web can snapshot a queue (R-PLAY-5…8) while its lists stay paginated (F-13).
+
+**Artists:** `GET /me/artists?q`, `GET /me/artists/{id}/songs`, `PATCH /me/artists/{id}`, `DELETE /me/artists/{id}` (only when unused)
+
+**Playlists:** `GET/POST /me/playlists`, `PATCH/DELETE /me/playlists/{id}`, `POST/DELETE /me/playlists/{id}/songs`, `PUT /me/playlists/{id}/songs/order`
+
+**Groups:** `GET/POST /me/groups`, `PATCH/DELETE /me/groups/{id}`, `POST/DELETE /me/groups/{id}/playlists`, `PUT /me/groups/{id}/playlists/order`
+
+**Preferences and scopes**
+
+- `GET/PUT /me/preferences/library-view`
+- `GET /me/sync-scopes`, `PUT /me/sync-scopes/{type}/{id}` (enable), `POST /me/sync-scopes/{type}/{id}/pause`
+
+**Mutations:** `GET /me/mutations/{requestID}`
+
+**Events**
+
+- `GET /me/catalog/changes?cursor` (paginated; can return `cursor_expired`)
+- `GET /me/catalog/snapshot`
+- `GET /me/events` (SSE, replays from a cursor)
+
+**Operations and transfers**
+
+- `GET /me/operations/{id}`
+- `POST /me/operations/{id}/upload-grant` issues a staging PUT or multipart grant, only to the operation's active owner.
+- `POST /me/operations/{id}/uploaded`
+- `POST /me/operations/{id}/cancel` cancels a waiting or active replacement or upload (any of the account's devices). For an initial upload it fails the sync like `cancel_pending` (R-ID-4); for a replacement the old content stays.
+- `POST /me/content/{contentID}/download-grant` issues a GET grant for the final key. Only the current content of a ready track the caller owns qualifies.
+
+There's no separate cloud manifest. Every catalog track is synced, so the catalog feed already carries each track's content ID, size and checksum.
+
+---
+
+## 7. Flows
+
+<a id="import-from-a-source"></a>
+
+### 7.1 Add songs in an installed app (local import)
+
+1. **Add songs** (from Home or Songs) opens the shared modal. The user picks files or folders from the device. Local files are the only way to add songs.
+   - Folders are scanned recursively where the platform allows.
+   - Only supported, readable audio is kept: MP3, AAC, FLAC or WAV, identified by the real codec, not the extension (D-8). Skipped items are reported as "unsupported format".
+   - Picks add up in one list: the user can remove one item, remove all, or add more.
+2. Each row has two fields:
+   - **Name**, prefilled from the embedded title or the filename without its extension. If the name contains a hyphen, split it once and offer the trimmed second part as a clickable artist suggestion.
+   - An optional **Artist**: the smart artist search over the account's artists, with **Did you mean…?** before a "new artist" is created (R-ORG-2).
+3. The modal explains: "Local songs stay where they are on this device. If you move or rename a file, Song Sleeve may lose access and you will need to relink it. Sync a song to keep it in your cloud library."
+4. The app extracts duration, size, format and SHA-256 and checks R-LIM-1. Invalid rows are flagged and can't be confirmed.
+5. Optionally, the user picks a playlist to add the songs to (as overlay entries) and toggles **Sync to cloud now**. The toggle starts on if the library scope is enabled. Without cloud sync (R-CLOUD-8) the toggle shows **Coming soon** and is disabled.
+6. On confirm:
+   - The app stores each song's source locator and access grant. Nothing is copied.
+   - The local songs go to the end of the library order.
+   - No connection is needed (R-LOCAL-1).
+   - The first local import shows the device-only notice (R-OWN-2).
+7. If the user asked to sync, or an enabled scope covers the songs, continue with §7.3 for each song.
+
+### 7.2 Add songs on the web (always synced)
+
+1. The same modal opens. A banner says: "Songs added on the web are uploaded to your cloud library."
+2. **Keep only on this device** shows the install-app alert (R-CLOUD-2) and imports nothing.
+3. The user picks files and reviews Name and Artist. The browser checks the limits.
+4. On confirm (a connection is required), each song enters the tab's sync queue and runs §7.3 straight from its `File` object, three at a time (R-CLOUD-9).
+5. Every device shows the new songs as **Syncing… x%**. The tab warns before closing while uploads run. If it closes anyway, the uploads stall; after the stall timeout each sync fails and its track document is deleted on every device (R-ID-4). A web tab can't resume without the file, and nothing is kept in the browser (R-WEB).
+
+### 7.3 Sync a song (local → synced)
+
+0. **Queue.** The song waits in the device's sync queue (R-CLOUD-9) until one of the three workers takes it. The account must have cloud sync (R-CLOUD-8).
+   - **Pre-check (F-21):** before creating anything on the server, the worker re-reads the source file's size and SHA-256 and compares them with the saved facts (R-CLOUD-3), and rechecks the limits. A mismatch marks the song **Needs attention** and nothing is created, so other devices never see a sync that was bound to fail. (The web checks the picked file the same way.)
+1. **Create the track document.** When a worker starts the song, `POST /me/tracks` sends the metadata, the artist (created or reused), the library position and the song's overlay playlist memberships. The server creates a `pending_upload` track and an `initial_upload` operation; every device now shows it as **Syncing…** with progress (R-ID-4). On this device, the local song is marked `syncing` and linked to the track ID.
+2. **Place the file (installed apps).** Copy it into `Songs` and verify the copy against the pre-checked facts (R-CLOUD-4). A file changed between the pre-check and the copy fails the sync (R-ID-4) and marks the song **Needs attention**.
+3. **Upload.** Request a staging grant and upload. Large files use multipart, which can resume through the operation.
+4. **Verify and publish.** The worker runs R-CLOUD-5 and commits the content ID, `state=ready` and the event.
+5. **Finish on this device.**
+   - The local song record becomes a `synced_files` entry for the `Songs` file. The source file stays where it was; the app no longer uses it.
+   - The overlay entries are dropped, because they are now server memberships.
+   - Other devices receive the event, make the song playable, and download it (§7.9).
+6. **Handle failures (all-or-nothing, R-ID-4).**
+   - An interrupted upload part resumes on the same operation until the stall timeout. A failed sync is never retried automatically (D-25).
+   - Any failure (rejected file, **Cancel sync** from any device, stall, non-retryable error) deletes the track document everywhere. On this device the `Songs` copy is removed and the song stays local, pointing to its source file, with its overlay entries restored. It is marked `sync_failed` with **Try again**. Other songs in the same batch keep going (R-CLOUD-9).
+
+### 7.4 Sync a playlist, group or the whole library (installed apps)
+
+**Sync to cloud** on Songs, a Playlist or a Group opens the scope modal. It shows:
+
+- the scope name
+- songs already synced
+- local songs on this device that will upload, with an estimated size
+- unreadable songs, marked as needing attention
+
+Confirming saves the scope (online) and puts every eligible local song in the sync queue (R-CLOUD-9); songs marked `sync_failed` are not included (D-25). While the scope stays enabled, every installed device automatically syncs its own local songs that enter it later. **Pause automatic sync** stops this and keeps songs that are already synced (R-CLOUD-7). On the web the scope shows only its status, because everything on the web is already synced.
+
+### 7.5 Edit name or artist
+
+- **Synced song:** `PATCH` with the expected revision. Once accepted, the replica updates and other devices apply the event. Files are never renamed, and content never changes.
+- **Local song:** the edit is saved on the device and works offline (R-LOCAL-2).
+
+### 7.6 Organize
+
+- **Server data (needs a connection, R-MUT-1):** creating, renaming and deleting playlists and groups; adding and removing synced members; reordering server items. Dragging shows a preview. If the server rejects the move, the last accepted order comes back.
+- **Local songs:** adding, removing or reordering a local song in a playlist changes only this device's overlay (R-ORG-4, R-ORG-6).
+- If another device deletes a playlist, this device removes its overlay entries for it when the event arrives.
+
+### 7.7 Replace audio file
+
+1. **Replace audio file** in the song menu opens the picker. The same path is allowed. For a synced song in an installed app, the folder check (§7.13) runs first; the picker opens when it finishes, and a file inside the `Song Sleeve` folder can't be picked.
+2. The app reads the file, extracts its facts and checks the limits. An invalid file stops here and changes nothing (R-LIM-3).
+3. **Suggestion step (R-MUT-5).** For Name and Artist, show the current value next to the extracted one (the title or filename, and the artist hint). The user picks **Keep current** or **Use new**, or edits the value. If the song has no artist, the extracted artist is still just a suggestion.
+4. **Confirm.** Nothing is applied before this point.
+   - **Local song:** point the song at the new source file and update its facts, on the device. Overlay entries and position are kept. Nothing is copied.
+   - **Synced song, installed app:** copy the new file into app-private staging (not the visible folder) and call `POST /me/tracks/{id}/replacement` with the chosen metadata, which returns an operation. Upload, verify and publish. One transaction then switches the content and applies the metadata (R-ID-3, R-ID-5). Meanwhile every device shows **Updating audio… x%** and keeps playing the current content (R-ID-4). After the switch they download the new content and apply it under their pins. A failure keeps the old content.
+   - **Synced song, web:** the same, uploading from the picked file.
+5. **Cancel** at any point before the final commit leaves the song as it was.
+
+### 7.7.1 Relink a local song (installed apps)
+
+Shown on songs with **Relink needed** (`needs_relink`) or **Access lost** (`access_denied`):
+
+1. **Relink** opens the picker. A file inside the `Song Sleeve` folder can't be picked (R-LOCAL-4).
+2. The app hashes the picked file.
+   - **Same SHA-256 as saved:** the locator and access grant are updated silently; name, artist, overlay entries and position stay; health returns to `ready`.
+   - **Different file:** it continues as **Replace audio file** (§7.7) from the suggestion step, with that file.
+3. **File changed** (`source_changed`, the file is still there but its size or hash differs): the song still plays (it's the user's own file) but can't sync (R-CLOUD-3, **Needs attention**). **Use changed file** runs **Replace audio file** with the same path, which rereads the facts through the suggestion step.
+
+### 7.8 Delete a song
+
+**Local song (works offline):**
+
+- The confirmation reads: "Delete '{name}' from this device? It will be removed from your library and playlists on this device. The file stays where it is."
+- On confirm, the app removes the record and its overlay entries. The source file is never deleted.
+- If the song is playing, playback stops (R-PIN-5).
+
+**Synced song (needs a connection):**
+
+- The confirmation reads: "Delete '{name}' from your account? It will be removed from the cloud, from every device, and from all playlists."
+- On confirm, the server queues a `delete` operation (R-SYNC-1). When it runs, it deletes the track, its memberships and its content rows, retires any open grants, and appends a `track_deleted` event. Cleanup jobs retry the bucket deletion until it succeeds.
+- The deleting device stops playback at once and removes its mirror.
+- Other devices remove their mirrors, waiting until playback ends if the song is playing (R-PIN-1).
+- Source files outside `Songs` are never touched.
+
+**Syncing song:** **Delete song** or **Cancel sync**, from any device, fails the sync and removes the track document everywhere (R-ID-4, §7.3 step 6). On the originating device the song stays as a local song; deleting it there too is a separate local delete.
+
+**From a playlist or group:** **Remove from playlist / group** removes only the membership, whether it's a server membership or an overlay entry. It never deletes the song.
+
+<a id="reconcile-the-local-library-whenever-the-app-opens"></a>
+
+### 7.9 Device reconciliation (startup, resume, reconnect, event, push)
+
+1. **Check for account deletion first.** If a cleanup credential exists, query the restricted status. A confirmed deletion starts the purge (§7.11). A plain 401 or 404 never does.
+2. **Catch up on the catalog.** Fetch changes since the cursor (or the full snapshot after `cursor_expired`) and apply them to the replica. Drop overlay entries whose playlist was deleted.
+3. **Remove before downloading.** For deleted tracks and for retired content, delete the device's own files now, unless they're pinned. Pinned files go when their pin is released.
+4. **Download (installed apps).** For each ready track whose `Songs` file is missing or holds old content:
+   - Request a download grant.
+   - Download to a temp file, counting bytes.
+   - Verify the SHA-256.
+   - Install the file atomically, or stage it if the song is pinned.
+   - On Android, downloads follow the network and free-storage rules of D-30 (§9.5).
+
+   Before downloading, run the folder check (§7.13) in quick mode, so files the user added, removed or changed by hand are handled in the same pass. A changed file is restored from the cloud; it is never accepted as an edit.
+5. **Check local song health.** Check the source file of every local song. A quick stat check runs on each open; a full hash runs only on import, periodically, or when something looks suspicious (R-LOCAL-3).
+6. **Auto-sync.** Put local songs that are in enabled scopes into the sync queue, except songs marked `sync_failed` (D-25) and accounts without cloud sync (R-CLOUD-8).
+7. **Stay in the background.** Reconciliation never blocks the UI. Each song shows its readiness.
+8. **On the web**, only step 2 runs.
+
+<a id="device-change-listener-and-background-synchronization"></a>
+
+### 7.10 Device listener by state
+
+| State | Behavior |
 | --- | --- |
-| Foreground native/desktop | Maintain an authenticated event stream and start reconciliation when accepted changes arrive. Download only missing/changed synced content; update organization/preferences from their accepted revisions |
-| Minimized installed desktop, process still running | Keep the application-level listener/worker running independently of its window. Start local updates without reopening the window; after computer sleep or lost connectivity, catch up before processing old hints |
-| Minimized mobile, execution available | Receive the event through the live listener or native push handler and start reconciliation without opening the UI. Delegate transfers and persistence to native background adapters so work does not depend on a screen or WebView staying active |
-| Mobile suspended or background execution deferred | Send a coalesced push wake-up; let the OS schedule the native handler/transfer. Persist pending reconciliation/application state and catch up at the next permitted execution or foreground resume. Do not report the device as updated until verified installation/cleanup succeeds |
-| Offline, missed event/push, process terminated, or force-stopped | No instant update is promised. Resume/reconnect/open fetches accepted changes from the durable cursor and compares the current manifest, repairing missed updates. A revoked session cannot fetch updates |
-| Web tab | Watch accepted changes while the tab can execute and catch up on visibility/reconnect. Update metadata only: events never download the whole library or fetch a second song Blob alongside current playback |
+| Foreground (any client) | Authenticated SSE; reconcile on each event |
+| Desktop minimized, process alive | The app-level listener keeps running without a window. After sleep or a lost connection, catch up before handling old hints |
+| Mobile minimized, execution available | The live listener or the native push handler starts reconciliation without the UI. Native adapters do the transfers, not the WebView |
+| Mobile suspended or deferred | A coalesced push wakes the app and the OS schedules the work. Pending state is kept. The device doesn't count as updated until the work is verified |
+| Offline, missed push, terminated | No instant update is promised. The device catches up on the next resume, reconnect or open |
+| Web tab | Listens while the tab can run, and catches up when it becomes visible or reconnects. Metadata only |
+| Session or account switch | Cancel the old account's server-side syncs first when online (§7.12), then close the stream, cancel jobs tied to the old account, and quarantine late callbacks. Keep the cleanup credentials |
 
-**Server delivery:** persist the accepted change and outbox entry together; a Railway dispatcher fans out to authenticated streams and native push registrations belonging to the account’s active sessions. Register/update/remove a push destination using authenticated routes such as `PUT /me/devices/{deviceID}/push-registration` and `DELETE /me/devices/{deviceID}/push-registration`; enforce device/session ownership, token rotation, provider-invalid-token removal, and logout/revocation. APNs serves iOS and FCM serves Android. Coalesce mobile wake-ups into a “changes available” hint and use the durable change feed for the complete ordered history. For multiple Gin replicas, each stream host tails committed per-user events from PostgreSQL by cursor; a local in-memory connection list alone cannot reach connections on other replicas. Push failures do not block catalog commits or delivery to other devices. Provider acceptance or stream delivery is not a device-applied acknowledgement.
+<a id="irreversible-account-deletion-and-device-cleanup"></a>
 
-**Railway stream lifetime:** public HTTP/SSE requests close after 15 minutes even with continuing traffic, or after five minutes without data. Heartbeats prevent inactivity closure but not the total duration limit. Require authenticated reconnect with jitter/backoff and replay from the saved durable cursor; recheck session expiry/revocation on reconnect and while serving the stream. Use a dedicated database listener/fanout per replica rather than a database connection per device. WebSockets avoid these particular edge limits if later justified, but still require authentication, replay and reconnect contracts. [Railway networking limits](https://docs.railway.com/networking/public-networking/specs-and-limits).
+### 7.11 Account deletion and device purge
 
-**Device reconciliation:** the stream, native push handler, startup, and resume all invoke the same account-scoped reconciliation coordinator. Serialize local index/file application so foreground and background workers cannot install/delete the same file concurrently. Persist each accepted event and its pending file work transactionally before advancing the receive cursor; track **Received**, **Staged**, and **Applied** separately. Coalesce to the latest accepted revision, ignore duplicate hints, recheck the current source/policy before installation, and retain pending work across interruption. Use the existing server per-user/track operation coordinator for download grants/completion; background scheduling does not bypass its slot or create content entities. Delayed jobs reauthenticate and recover the same operation/grant safely; grant-expiry and abandoned-transfer mechanics remain item 5. On session/account change, disconnect the stream and stop/cancel account-bound catalog/transfer jobs so another account never receives their results. Preserve cleanup-only credentials for any retained account cache; terminal account-deletion hints/status checks invoke the separate purge coordinator even after normal sessions are revoked.
-
-**Native execution:** on Android, a native FCM data handler schedules unique WorkManager reconciliation/download work with network constraints and retry; ordinary library synchronization uses normal-priority messaging. Android scheduling and Doze can delay execution, so background updates have no fixed immediate deadline. On iOS, a native APNs background-notification handler performs bounded catch-up and schedules downloads with a background `URLSession`; completion handlers persist verified installation/cleanup work even when the interface is absent. iOS does not guarantee background-notification delivery and can throttle it; background transfers can run outside the suspended app process, but final application still waits for permitted execution. Batch/coalesce wake-ups and distinct-track transfers rather than polling constantly. These are proposed adapters to implement/validate through Capacitor’s native bridge. [Android persistent work](https://developer.android.com/develop/background-work/background-tasks/persistent), [FCM message priority](https://firebase.google.com/docs/cloud-messaging/android-message-priority), [Apple background notifications](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app), [Apple background downloads](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background).
-
-**Playback and editing remain separate:** background reconciliation must respect the current playback pin and pending-change notice. Download a replacement to staging, but defer replacing/removing the playing resource until its playback finishes; unchanged and unrelated songs update normally. Background workers apply only already-accepted server decisions, not offline edits or an offline mutation queue. Report cloud completion separately from each device’s local readiness; background work waiting for network, storage, or OS execution remains pending. Never modify external originals.
-
-**Implementation validation (checklist item 7):** change metadata, organization, synced audio, and unsync from desktop while a phone is foregrounded, minimized without playback, and minimized during playback. Verify event-triggered updates without reopening when the OS permits execution, safe deferred current-song application, duplicate/coalesced push recovery, app suspension, low-power/Doze modes, missed push, terminated/force-stopped state, network loss, token rotation/revocation, expired transfer grants, interrupted download, and disk exhaustion. Missed/deferred delivery must converge on the next permitted execution/resume. The behavioral design is agreed; this item remains open for these tests during implementation.
-
-### Apply changes after current playback finishes
-
-When a notified change affects the currently playing track, keep its media resource, accepted playback snapshot, elapsed time, duration, queue position, and controls intact. Pin the exact local file or web Blob used by that playback session; do not overwrite/delete it, revoke its object URL, reload the media element, or interrupt playback. Show this notice in the persistent player and Playing screen: **“This track was updated. Changes will be applied after playback finishes.”** For unsync, clarify that its local copy will be removed afterward and a new local source will be required.
-
-The account catalog replica can immediately receive the latest track document, so library views show the accepted change. The active player retains the old name/artist/duration snapshot until the safe boundary, avoiding a progress bar measured against different audio. Installed clients can download/verify the replacement into staging while playback continues, using the per-track server operation queue; the active `Songs` source mapping remains unchanged until playback releases it. If no song is playing, apply a ready replacement/removal immediately. Unrelated songs update normally.
-
-At natural playback end, or when the user voluntarily stops or switches away from the song, release the old resource and apply the latest pending change. Merely pausing or navigating pages does not count as completion. For replacement, atomically install the verified staged file and switch the local source reference, then remove the retired managed file. If replacement bytes are not yet ready, finish the old playback normally and show **Needs download** rather than start another play of retired content. For unsync, remove the pinned mirror/cloud-derived offline copy and show **Needs source**. Repeat-current-song must process this boundary before starting another repetition; it must not keep replaying retired audio and postpone the update indefinitely.
-
-On web, keep the existing Blob until the current playback ends; receiving a notification must not fetch another audio Blob alongside it. After releasing it, use the latest document/content reference for the next requested playback, fetching only that selected complete song. An unsync event prevents new cloud loads and removes a pinned cloud-derived offline file only after its playback releases it.
-
-Coalesce multiple notifications received during one playback into the latest accepted pending revision; discard superseded staging files safely. A newer replacement or unsync must win over an older pending install. Persist pending application/cleanup work so an app crash resumes reconciliation; if no playback resource survives restart, apply cleanup before starting new playback. Keeping the old resource solely for an already-started playback session is a temporary device pin, not retention of an old content entity or a playable version history. The server still deletes the old content entity and replaces the reference in the same track document.
-
-### Explicit unsync and missing-source recovery
-
-**Unsync and remove audio** is an account-wide media-removal operation, available for one song and from the sync controls of a playlist or group (the library-wide Songs control can apply it to all synced songs). It removes the cloud binary and its app-controlled local mirrors; it does not delete track documents, artist assignments, ordering, playlists, or group membership. **Pause automatic uploads** is a distinct action that stops future transfers and keeps existing cloud/local copies. Label these actions separately so an ordinary pause is never mistaken for removal.
-
-| Step | Required behavior |
+| Phase | Behavior |
 | --- | --- |
-| Select scope | A song resolves to one track; a playlist resolves to its currently synced songs; a group resolves to the deduplicated union of currently synced songs in its playlists. Include previously synced tracks whose cloud deletion is pending. Local-only songs that were never synced are not affected |
-| Preview before confirmation | Show the exact affected tracks/count and explain that cloud copies, installed `Songs` mirrors, and cloud-derived browser offline copies will be removed. State that track metadata and memberships stay, new playback becomes unavailable until a local file is selected, while an already-playing session is allowed to finish, and the user can instead delete the track. Highlight tracks also used in other playlists/groups, because removal affects those views too. Explain that disconnected devices clean up when they reconnect |
-| Confirm or cancel | Use a clearly labeled **Unsync and remove audio** button and **Cancel**. No removal occurs before confirmation. Freeze the previewed membership/content revisions for that operation; if the affected set changes, refresh the preview and require confirmation of the changed set |
-| Accept account change | Require online API confirmation and record the request. If another operation owns the user/track slot, show the removal as queued without changing that active operation’s source. Once the removal owns the slot and its preview/revision is still valid, atomically mark the source `none`/`needs_source`, suppress uploads, and persist catalog/removal events with the job. Preserve accepted metadata, content reference, and memberships. Source absence and asynchronous cleanup progress are separate states |
-| Remove controlled audio | Run the server removal operation under the per-user/track sync slot; other operations for that song must wait. Stop issuing new grants for removed media and delete cloud objects with retries. Clients remove corresponding managed mirrors and cloud-derived OPFS copies after the completion event, immediately if idle or after current playback finishes if the resource is pinned. Disconnected devices apply the event at their next online reconciliation. Release old temporary downloads/Blobs when no active playback holds them. Never delete external originals or unrelated local-only files |
-| Recover or delete | Each retained track shows **Needs source — select a local file or delete this track**. **Select local file** opens the existing manual source modal with copy-or-link choice, refreshed technical facts, and optional name/artist suggestions. A verified selection restores playback on that device using the same track ID and keeps cloud sync Off. Upload again only if the user explicitly toggles **Sync this song to cloud** on and confirms it. **Delete track** opens the existing library-wide deletion confirmation |
+| Confirm | Profile → consequences → current password (`/auth/reauthenticate`) → **Permanently delete account**. A lost response is recovered by request ID or through the restricted status, never by sending a second delete |
+| Accept and revoke | Persist the request and the account gate together. Revoke every session, token and proof. Block login, writes and grants. Send terminal hints. The requesting device starts its own purge |
+| Drain media | Cancel operations, retire or expire grants, abort multipart uploads, and re-scan for late writes |
+| Wipe server data | Objects, staging, tracks, content, organization, preferences, scopes, events, push registrations, sessions, mail jobs and receipts. Retries rebuild the inventories |
+| Delete the user last | A physical delete. Keep only the minimal ledger and the pending cleanup receipts |
+| Device purge | Persist `purge_pending`; stop playback; cancel transfers. Delete the account namespace: `Songs` (mirrors and in-progress sync copies), the database with its local-song records and overlay, credentials and caches. Source files stay in device storage. Quarantine late callbacks, re-scan, then send `ack`, retrying until it succeeds |
 
-Before confirmation, show a notice such as: “Unsyncing these songs removes their cloud audio and Song Sleeve-managed copies from your devices, including offline browser copies. Their track information and playlists will remain. To play them again, select local files for the affected tracks, or delete the tracks. Other playlists containing these songs are affected too. Disconnected devices remove copies when they next reconnect. A song already playing will finish before its local copy is removed.” An external original might no longer exist; never promise that it can restore the song.
+Confirmation text: **"Permanently delete your account and library? This removes your cloud songs, playlists, groups, artists and the songs stored by Song Sleeve on your devices. You will be signed out on every device. This cannot be cancelled or undone. Offline devices are cleaned when they next connect."**
 
-Prevent automatic reupload through overlapping scopes. Unsyncing a playlist/group disables that selected scope’s future automatic uploads and applies a per-track explicit-unsync suppression override to each affected track, even if another group, playlist, or library scope remains enabled. Unsyncing one song applies the same override without disabling unrelated scopes. Removing playlist/group membership alone still does not unsync a song. Clear suppression only when the user explicitly toggles **Sync this song to cloud** on and confirms cloud sync for that track. Previously unsynced tracks start with that toggle **Off**, including in local-source recovery; selecting or confirming a new source never turns it on. Show suppressed tracks with their toggles Off in scope modals; a general scope confirmation must not clear suppression for an individual song unless the user explicitly enables it. Selecting a local replacement alone leaves suppression enabled.
+What deletion can't guarantee:
 
-Cleanup events identify the removed content/source revision, and device indexes track which files are app-managed mirrors. Delete only those owned files; do not traverse arbitrary external paths. Keep per-device cleanup work until it succeeds, and bind late upload/download completion to the current source/policy revision so removed audio cannot be restored automatically. A newly selected local file belongs to a later source revision and must not be removed by delayed cleanup of the previous mirror. All server work uses the single per-user/track operation slot and completion notifications defined above; grant/lease recovery and cleanup retention mechanics remain checklist item 5.
+- Devices that never come back and the user's original source files can't be erased remotely.
+- Provider-side infrastructure snapshots keep data until the provider's retention expires.
+- There are no database backups in this release (D-16). When they're added, a restore must replay the deletion ledger before it serves traffic (§10.4).
 
-Keep missing-source tracks visible in Songs, playlist, group, and artist views with their saved metadata and warning/actions; unavailable rows cannot start new playback. If the current song is affected by unsync, let that already-started playback finish and show that unsync cleanup is pending; release/remove its pinned managed file or Blob afterward. Keep the track in organization lists, while skipping it for new queue navigation until a playable source is supplied. On another device, account metadata can indicate that a replacement exists while that device still needs its own local file; device readiness remains separate. Offline devices may continue using a cached copy before receiving the event; no immediate remote wipe is promised. Show **Cleanup pending** separately from **Needs source** while cloud or local deletion retries remain.
+A new registration with the same email gets a new UUID, so old cleanup receipts never wipe it.
 
-### Reconcile the local library whenever the app opens
+<a id="password-recovery"></a><a id="session-lifetime-and-credential-storage"></a>
 
-Before normal catalog/audio synchronization on online startup, resume, reconnect, or a lifecycle notification, check retained device-cleanup credentials for a confirmed account-deletion request. If normal authentication/data lookup fails because the account/session no longer exists, use this restricted lookup before offering ordinary sign-in recovery. A positive deletion state starts durable local purge; a timeout, generic 401/404, or missing catalog page alone must never erase local files. Offline startup cannot discover a remote deletion; once a device has learned deletion, persist the purge marker and finish cleanup even if connectivity is lost. See [irreversible account deletion and device cleanup](#irreversible-account-deletion-and-device-cleanup).
+### 7.12 Sessions, logout and password recovery
 
-At every app open on web, desktop, and mobile, reconcile the account catalog for **all** tracks, including unsynced songs. The Device Sync Service also invokes this same reconciliation on accepted-change notifications and background wake-ups; installed clients do not wait for another app open when permitted execution is already available. Once online and authenticated, fetch accepted track-document changes since the device’s catalog cursor and apply them to the local replica; an app rename on device A therefore appears on device B at its next online open. Catalog synchronization is independent of the cloud-audio manifest and never requires uploading unsynced audio. When offline, retain the last accepted cached document for browsing/playback; reject new edits without applying or queuing them. On reconnect, fetch server-accepted account changes rather than submit disconnected edits. A metadata-only change updates labels and artist views without changing file locators, external filenames, or audio bytes.
+- **Logout** revokes the session and clears the credentials.
+  - **Log out** (installed apps) keeps the account namespace, so local songs, their changes and the mirrors come back on the next login to the same account (D-9). Another account on the device never sees them (R-OWN-3).
+  - **Syncs in progress at logout or account switch (F-24):** while still online and signed in, the device first cancels its active syncs and replacements on the server (`cancel_pending`, `POST /me/operations/{id}/cancel`), so other devices don't show them until the stall timeout. With plain **Log out** or a switch, those songs go back to `queued` (not `sync_failed`, since nothing failed) and resume at the next login to that account. With **Log out and remove**, they are dropped with the namespace. Offline, the server fails them by stall (R-ID-4).
+  - **Log out and remove from this device** (installed apps) also deletes this account's namespace: its `Song Sleeve` folder, its database with the local songs and overlay, and its caches. It warns first: **"Local songs on this device and their playlist entries will be lost permanently. Synced songs stay in your cloud."** Source files outside `Song Sleeve` are never touched (R-LOCAL-4). It runs as a local purge: playback stops, transfers are cancelled, and an interrupted removal resumes on the next start. It works offline; the server session is revoked when possible.
+  - The web has nothing stored to clear (R-WEB); it drops its in-memory state.
+- **An expired or revoked session in an installed app** keeps cached browsing and local playback working. Syncing and edits to server data ask the user to sign in again.
+- **Password recovery:**
+  1. **Forgot password?** asks for an email and always returns a generic response.
+  2. The server creates a random token, stores its hash with a 30-minute expiry, invalidates earlier tokens, and emails an HTTPS link.
+  3. The reset page validates the token without consuming it, then submits the new password (R-AUTH-4). If two submissions race, only one succeeds.
+  4. An expired link offers to send a new one.
+- **Where the reset page lives (D-27):** the emailed link opens a reset page served by the web app as a public route. It is the one web-app page open to every account (an exception to R-WEB-ACCESS): it only sets the new password and never creates a web session. Users then log in in the installed app; the success message says so, and allowlisted accounts also get a link to the web login.
+- **Reset page hardening:** no third-party scripts, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, and the token is stripped from the URL.
+- **Email jobs** are transactional and idempotent, and retry with backoff until the token expires. Account deletion cancels them.
 
-Apply explicit-unsync media-removal events before scheduling downloads. Do not queue a restore of removed content. Delete unpinned app-managed `Songs` mirrors, obsolete managed versions, temporary downloads, and cloud-derived OPFS offline copies immediately. If the affected file/Blob is currently playing, retain it only for that playback session, show the pending-change notice, and defer its cleanup until playback finishes or the user leaves that song. Clear retired locators for new playback and show **Needs source — select a local file or delete this track**. Retry failed file deletion as durable local cleanup; do not mark physical cleanup complete until deletion succeeds. Never remove unrelated local-only songs or external originals. Disconnected-device cleanup runs at its next online reconciliation.
+<a id="songs-folder-check"></a>
 
-At every startup, an installed desktop/native client opens the device index, creates the app-managed `Songs` directory if needed, fetches the user’s lightweight cloud manifest, and reconciles local files. For a local-only linked song, validate its selected origin path/URI and access; if unavailable, mark it `needs_relink`. For a local-only managed-copy or Drive-imported song, validate the active file in `Songs`. For every cloud-synced song, fetch the current lightweight cloud manifest and compare version/checksum with the device’s `Songs` entry. Download missing/new versions to a temporary file, verify them, then atomically replace/add them in `Songs`; remove managed copies of deleted content through the corresponding cleanup event. When replacement is accepted, retire the old local content for new playback. If its resource is already playing, keep it pinned, show the update notice, and stage the new file without interrupting that session; apply installation/cleanup after playback ends. If idle, remove/replace retired content immediately when safe. If the newly referenced content is not installed or download fails, mark `needs_download` for the next playback and retry; do not start another playback of retired content or fall back to native cloud playback. Reconcile in a resumable background task after opening the library so startup UI is not blocked; the app can show which synced songs are ready locally and which are still downloading.
+### 7.13 `Songs` folder check (installed apps)
 
-The web client syncs metadata only. It does not download the entire library at startup: when a synced song is selected, fetch that complete song from the bucket into the one active Blob-backed player resource, then release it on the next selection.
+The check enforces R-DEV-4. It runs under the reconciliation file lock (R-DEV-1), so it never races a download or an install.
 
-Keep reconciliation efficient: compare manifest version, size, and checksum metadata first; download only missing/changed content and avoid hashing every unchanged audio file at each open. Verify full checksums on import/download and rehash periodically or after suspicious changes. Show sync progress and library health. For unsynced songs, observed external changes update only device health (`source_changed`, `needs_relink`, or access status), never the saved track name, artist, size, duration, checksum, or content ID. Detection is best-effort; unchanged timestamps or unavailable permissions may hide a change. Offer a manual **Update source / Resync** action. For synced songs, an unexpectedly modified managed file is a local integrity problem: restore the accepted version from cloud rather than accepting that file as a catalog update.
+**The folder manifest (D-29).** Each account folder holds a manifest file, `Song Sleeve/{account folder}/.songsleeve-manifest.json`. It records what the app itself put in the folder, so the record survives a reinstall that keeps the folder.
 
-## Data model
+- **Content:** a format version, the account ID, the time of the last check, and one entry per mirrored file: content ID, file name, size, SHA-256 and the time it was synced. Nothing about local songs (R-OWN-1).
+- **Writes:** updated after every install, removal and check, always atomically (temp file, then rename), so a crash leaves the old or the new manifest, never a half-written one.
+- **Trust:** the manifest is a hint, not proof. It lives in a user-visible folder, so a size or checksum in it is used only to skip work, never to accept a file the check hasn't verified.
+- **Reference:** the manifest is compared with the server's catalog (the replica). The catalog is the server's list of what belongs in the folder; no per-device copy of the manifest is stored on the server.
+- The `synced_files` table (§5.2) stays the app's working index; the manifest is its copy inside the folder.
 
-| Entity | Purpose |
-| --- | --- |
-| `users` | Account identity and library ownership, unique normalized email, password hash, and `email_verified_at` |
-| `email_verification_tokens` | Hashed, expiring, single-use verification tokens; raw tokens exist only in outbound email links |
-| `user_sessions` | Opaque session-token verifier/hash, account/device binding, created/expires timestamps (absolute 30 days), last-active time and revocation state; server checks it for every authenticated request |
-| `password_reset_tokens` | Account-bound random-token hash, 30-minute expiry and single-use consumption state; reset atomically changes the password and revokes all sessions |
-| `email_jobs` | Verification/reset email delivery and bounded retries until token expiry, with encrypted transient link material, provider idempotency key and sanitized errors; wipe account-owned jobs during deletion |
-| `reauthentication_proofs` | Hashed one-use proof bound to account/session and `delete_account` purpose, expires after 5 minutes; cannot be replaced by an old ordinary session token |
-| `account_deletion_requests` | Irreversible request ID, opaque original account UUID, phase/progress/retry and completion state; durable across worker failure and user hard deletion, without cascading away with `users`. Retain only minimal deletion/restore-suppression facts after server cleanup; no profile/library recovery data |
-| `account_deletion_work_items` | Temporary inventory/checkpoints for draining transfer capabilities, removing bucket/backup objects and hard-deleting associated records; idempotent worker work, removed/scrubbed after server cleanup |
-| `device_cleanup_receipts` | Device-install/account UUID, hashed cleanup-only credential, deletion-request reference and pending/acknowledged state. Issued while signed in and retained independently of sessions/user row; supports only restricted deletion status and acknowledgement, never library access |
-| `library_view_preferences` | Account-synced booleans controlling whether Songs, Playlists, and Groups appear in Library; all enabled initially |
-| `tracks` | The single authoritative current track document: immutable lifetime `track_id`/owner, name, nullable `artist_id`, duration, byte size, media format/checksum, source mode/availability, current content-version ID, source/policy revision, cloud-upload suppression, revision/update time, and library-wide order; present even without any cloud object or playable source |
-| `artists` | User-owned artist vocabulary with display name and normalized name; unique per user after case/whitespace normalization |
-| `tracks.artist_id` | Nullable same-user foreign key to `artists`; null means no artist is assigned |
-| `track_content_versions` (immutable content entities, not retained version history) | Each row identifies one accepted audio payload: immutable ID, track ID, checksum, byte size and verification facts, optional provenance, and nullable cloud object key/readiness. IDs and accepted payloads are never rewritten. Every explicit source-file submission deletes the old content entity and creates a new one with a fresh ID, even for identical bytes, then replaces `tracks.current_content_version_id` and the metadata snapshot atomically. Cleanup jobs/tombstones hold only what is needed to remove old managed binaries; no playable old-content history remains. No audio bytes or device paths in PostgreSQL |
-| `playlists` | User-created named manual song collection; membership is only explicit `playlist_items`, with no rules/type discriminator |
-| `playlist_items` | User-selected song membership and playlist order; same-user track/playlist foreign keys and unique membership, no other child entity types |
-| `groups` | User-created named container of playlists only; no parent-group/child-group relation or automatic membership |
-| `group_playlists` | User-selected playlist/group membership and order; same-user playlist/group foreign keys and unique membership. A playlist may belong to several groups; groups never belong to groups |
-| `import_jobs` | Durable local and Drive import progress and errors |
-| `cloud_sync_scopes` | User-owned scope (`library`, `group`, or `playlist`) with enabled state; unique by user/type/collection and controls current and future song uploads |
-| `cloud_sync_jobs` and `cloud_sync_job_items` | Scope membership snapshots and aggregate progress; each item references a `track_sync_operations` record for transfer/removal status rather than maintaining another active transfer state machine. Items bind accepted content/source revisions and shared-track requests use the same coordination |
-| `track_sync_operations` | Per-user/track active-operation slot and queued operation identities, owning device/worker, request ID, content/source revision, heartbeat/lease and completion state; the PostgreSQL constraint/transaction enforces one active slot across all API/worker replicas, without holding a database transaction open during transfers |
-| `sync_event_outbox` | Accepted catalog/configuration and completed-media change events persisted with their commits; replayable per-user cursors support foreground streams, coalesced mobile push wake-ups, reconnects, and delivery retries. Notification delivery is separate from device application |
-| `device_push_registrations` | APNs/FCM provider token and platform bound to an authorized account/device/session, with rotation/invalid-token/revocation state; no device filesystem paths. Used only to signal available accepted changes |
-| `device_library` (device-local SQLite) | Read/playback replica of server-accepted catalog and artist records, device cursor, and outstanding online-request status identifiers. No offline catalog mutation outbox or queue; media staging and previously authorized device-application/cleanup work remain separate |
-| `device_song_locations` (device-local SQLite) | Resolves the track document’s one active source on this device: `managed_songs` for copied, Drive-imported, or synced files; `linked_origin` for original-location imports. Store URI/bookmark, local path, access grant, locally installed content-version ID/source revision, mirror ownership, cleanup state, health, observed file stats, and last-checked time only on-device. Observations do not overwrite the accepted track snapshot. Do not sync paths or grants. Track the staged content/pending revision and active playback pin locally so current resources survive until playback ends; persist pending accepted-event reconciliation/application work and native background-task IDs in the device index. Foreground and native workers share one local application coordinator. Web cloud playback is transient player memory; explicit offline downloads are a separate local cache |
-| `mutation_receipts` | Server-side results/status for authenticated online requests, unique by user/request ID; retries/status lookup recover the same action without duplicate execution. Clients retain only outstanding online request IDs, not deferred offline mutations |
-| `change_log` | Ordered catalog changes for incremental sync and recovery |
+**When it runs:**
 
-Use stable `track_id` and content-version IDs, never filenames or paths, as identity. `tracks` owns the current accepted metadata and source descriptor; supporting content-version rows identify the audio payload and optional cloud synchronization object. They do not define a native/desktop playback source. Keep the track snapshot and active content pointer consistent in the same transaction when accepting a replacement. Do not persist device paths on the server. For unsynced tracks with a source, the device’s `device_song_locations` row resolves the selected managed copy or linked original. For synced desktop/native tracks, it resolves the verified file in the device’s `Songs` directory. The bucket key is used to download/update that local file, not for native playback. Web has no full-library local map unless the user downloads tracks offline; ordinary synced playback uses one transient Blob. If a linked original goes missing, mark it `needs_relink`; if a synced local `Songs` file is missing or outdated, mark it `needs_download` and restore it from the bucket. After confirmed unsync, the track remains but has no active source (`needs_source`); do not restore removed cloud audio or revert to its old original automatically. Conflict resolution remains a checklist decision; repeated source files always replace content.
-
-### Authoritative track document and update rules
-
-There is one account-level track document per library entry, including songs that have never been uploaded. It declares that the track exists and contains its accepted metadata and reference to separate audio bytes. PostgreSQL accepts and persists document changes only through authenticated online requests; SQLite on installed clients and IndexedDB on web cache accepted documents for offline reads/playback. Creating a local-only track still requires an online catalog import, but never implies cloud audio upload. Disconnected edits/imports are rejected, not applied locally and not stored for later replay. Forms may hold unsaved input, but no authoritative or pending offline track is created. Name, artist, and accepted file facts belong to the account, not to each device; running devices apply dispatched accepted changes for synced and unsynced tracks alike; native background workers reconcile when permitted, and deferred/offline devices catch up on resume/reconnect/open.
-
-| Part of the document | Meaning |
-| --- | --- |
-| Identity and organization | Stable `track_id`, owner, library order, and references used by playlists and artist views; relinking or replacing bytes does not create a new library identity |
-| Current metadata | Name, optional `artist_id` (null allowed), duration, byte size, format/media type, and accepted checksum; the complete last-accepted snapshot is on `tracks`, even for unsynced songs |
-| Current audio and source | One `current_content_version_id` plus `source_mode`: `managed_songs`, `linked_origin`, or `none` after explicit unsync; `source_availability=needs_source` marks the missing binary. The retained content ID describes the last accepted generation and facts, not a promise that playable bytes still exist |
-| Cloud availability | Readiness of the optional cloud copy of that same generation, resolved through the content record. Cloud readiness is separate from source mode and device download readiness |
-| Update bookkeeping | Revision/update time identify the accepted snapshot; source/policy revision binds transfer and cleanup work to the correct source lifecycle. An explicit-unsync upload-suppression flag prevents automatic resurrection; device observations and uncommitted form input remain distinct |
-
-The source descriptor is portable; its physical locator is resolved on-device. An unsynced copied song and a synced installed song can both have `managed_songs` as their source mode, while an unsynced original-location import uses `linked_origin`. Each installed device has one active location for a track, not a list of fallback playback origins. A synced track always resolves to that device’s `Songs` file. On web, its platform adapter fetches the same accepted cloud generation one complete song at a time; this creates a temporary player resource, not another persistent track source. A device without an unsynced song’s local file can display its metadata but cannot play it. Keeping provenance for the original file does not make it another source.
-
-| Event | What changes |
-| --- | --- |
-| Initial import | Read/validate the selected file, extract duration/size/format/checksum, review name and optional artist, and create the track document with its selected source |
-| Explicit in-app name or artist edit | Update the account-level track document for synced or unsynced songs and publish a catalog change. Other running devices apply it through the Device Sync Service, including devices unable to access unsynced audio; background/deferred clients follow the native execution and catch-up rules. Do not rename external files, create a new audio generation, or download unchanged audio |
-| First successful cloud sync | Verify bytes against the accepted document before upload. Once the cloud copy verifies, set the document’s source mode to `managed_songs` and publish cloud readiness for its current content ID. Keep name, artist, size, and duration unchanged; installed clients resolve that source to local `Songs` |
-| Synced file replacement/reupload | Validate new bytes and verify the staged cloud copy before accepting replacement. Delete the old content entity, create the replacement with a fresh immutable ID, and atomically replace the track’s content reference and file facts. Name/artist change only from confirmed inputs. Keep the same track ID and installed playback in `Songs`; remove the retired managed binaries through cleanup. Connected devices receive the completion notification and reconcile immediately; offline devices catch up on reconnect. Install/remove immediately if idle, or stage and defer physical changes until the current playback finishes. Web uses the replacement on its next playback request. Each explicit source-file submission creates replacement content even for identical bytes; a network retry of that same request continues its existing operation rather than create another replacement |
-| External edit, rename, move, or replacement of an unsynced source | Leave the document unchanged, even if name, duration, size, embedded metadata, or bytes now differ. Startup checks may record a device-health warning only. Stale metadata is an accepted limitation of unsynced songs |
-| User manually chooses **Update source / Resync** for an unsynced song | Open the file picker even if the user selects the same path. Read the file again and refresh duration, size, format, and checksum on confirmation. Show its filename/embedded title as a clickable **Name suggestion**, alongside optional artist suggestions, while keeping current name/artist in the editable fields. Keep both until the user accepts a suggestion, types an edit, or clears artist. Every confirmed selection creates replacement content with a fresh ID, even at the same path or with the same checksum; delete the old entity and replace the reference in the same account document. Refresh this device’s locator, and verify a managed copy before installing it. Other running devices receive the dispatched document, with background/resume catch-up when needed, but need their own matching local file to play an unsynced replacement |
-| Confirmed unsync of a song, playlist, or group | Keep track IDs, metadata, and memberships. Remove the affected cloud binaries and app-controlled local mirrors; publish `source_mode=none`, `needs_source`, and upload suppression. Devices apply the completed removal notification, or catch up on reconnect, deferring cleanup of a currently playing resource until playback ends; then offer **Select local file** or **Delete track**. A source selected afterward starts a new source lifecycle and must survive delayed cleanup |
-| Startup sync/download of an accepted cloud version | Update the local `Songs` file and device readiness. Apply server track-document changes to its replica; do not re-extract local embedded metadata to overwrite the accepted catalog |
-| Sync completion arrives while that track is playing | Update the account replica and mark pending device application, but keep the active content resource and playback snapshot unchanged. Show the update notice; install the replacement or remove the old mirror only after playback finishes. This temporary playback pin does not preserve a playable content history |
-
-For unsynced tracks, “source of truth” means the last explicitly accepted document, not a guarantee that an externally editable file still matches it. Automatic scans, file watchers, playback decoding, and cloud-scope jobs must not silently refresh its metadata or promote changed bytes. The player may use the decoded file’s actual duration for runtime timing without saving it back to the document. Before uploading a previously unsynced file, verify its bytes against the accepted size/checksum; if they differ, pause that item and require manual source confirmation instead of uploading unreviewed changes. This also applies to future members of an enabled sync scope. Syncing provides verified cloud bytes and recoverable managed local copies, while linked unsynced originals retain the stated uncertainty.
-
-Track API responses expose this complete current document rather than asking clients to assemble competing metadata records. Every newly confirmed online `POST /me/tracks/{trackID}/source` action allocates a fresh content ID and replaces/deletes the prior content; no checksum-based no-op or existing-content lookup is performed. Repeating that same request ID for delivery retry returns/resumes the same operation. Suggested operations are `PATCH /me/tracks/{trackID}` for explicit name/artist edits and `POST /me/tracks/{trackID}/source` for confirmed source refresh or replacement. Clients submit extracted facts and reviewed metadata with the expected track revision; the API checks ownership and same-user artist references, then commits the accepted snapshot, audio pointer, and change-log event together. File locators and access grants are updated locally. For synced replacements, finalize only after cloud verification; failures preserve the previous accepted document. Offline confirmations fail with a connection-required error and never apply or queue a mutation. Check expected revisions for concurrent online writes, preserve same-request retry identity, and recover an uncertain online result by querying its status before changing local state. See the online-only acceptance flow.
-
-### Track identity throughout its lifecycle
-
-Assign `track_id` once when the track document is created. It identifies the user’s library entry for its entire lifecycle, not a filename, path, checksum, or a particular audio binary. Creation requires server acceptance while online. A client may propose a stable UUID in that request, but a form/picker selection is not a library track until accepted; server persistence must not change the ID assigned to the accepted track. Every device replica and playlist membership references this same account-level identity.
-
-Every entity’s ID is immutable; no operation edits an existing track ID or content ID into a different value. What can change is a reference stored in the track document. For example, track `T1` initially references content `C1`. Replacing its audio deletes content `C1`, creates a new content entity `C2`, and sets `T1.current_content_version_id` to `C2`. Track `T1` remains the same document, with the same playlist memberships. This is deletion and creation of content, not an in-place mutation or renaming of content `C1`. Selecting the same file again is no exception: the next explicit submission replaces `C2` with a newly created `C3`, even if all audio bytes match.
-
-The source mapping resolves where the accepted content can be read on a particular platform/device. Replacing that source uses the newly selected source reference; any source identity is immutable too. Any explicit source-file selection/reupload, including a relink to identical bytes or the same path, creates a new content entity and replaces the old one. Checksum equality never suppresses this replacement. Keep actual paths/access grants in the existing device-local location map, with source revisions for transfer/cleanup safety; no extra competing source model is required.
-
-| User action | Track ID | Content/source references |
+| Mode | What it checks | When |
 | --- | --- | --- |
-| Rename song or change artist in the app | Unchanged | Content ID and physical source stay unchanged; update only confirmed document fields |
-| Confirm any file as this track’s new source | Unchanged, whether the file is different or identical | Delete the old content entity, create a new one with a fresh ID, and replace the track’s content/source references and accepted facts after validation; never skip replacement based on checksum equality |
-| Manually relink the same file at the same or another location | Unchanged | Treat the confirmed file selection as another source submission: delete old content, create replacement content with a new ID, and update the source reference/revision |
-| Automatically upload/mirror already-accepted content | Unchanged | Transfer the accepted content ID without creating another entity; this is delivery of existing content, not a user submission of a new source file |
-| Unsync, then select a local file to recover | Unchanged throughout the missing-source state and recovery | Remove active availability on unsync; every confirmed recovery-file selection replaces the old content with a newly created entity and fresh ID, even for identical bytes. Cloud sync remains Off unless explicitly toggled on |
-| Delete the track | That track’s lifecycle ends | Remove it through the explicit deletion flow; never recycle its ID for an unrelated new library entry |
+| **Quick** | File names and sizes against the manifest; hashes only files that differ or are unknown | Every app open and resume (part of §7.9). On desktop, also when the system reports a change in the folder (debounced). Android has no reliable folder watcher, so it relies on open and resume |
+| **Full** | Every file's SHA-256 | **Check Songs folder** in Settings; before a source change (§7.7); whenever the manifest is missing, unreadable or belongs to another account |
 
-The track document is updated in place, while its old content is deleted and replaced by a newly created content entity. Preserve playlist memberships/order and publish the replacement reference under the same `track_id`. Stage and verify candidate bytes before committing that change so a failed selection/upload leaves the accepted track/content intact. Commit old-content removal, new-content creation, the updated track reference/file facts, and change/cleanup events as one catalog transaction; clients must never observe a dangling content reference. Physical bucket deletion is retried under the server operation; local cleanup is separately retried after notification/reconnect, with an already-playing device resource pinned until playback finishes. These temporary cleanup records are not a retained version library. External linked originals are never deleted by content replacement. Display name and artist follow the existing suggestion/confirmation rules. An **Add songs** import creates a new track entry and its content; updating a selected existing track’s source replaces its content under that same track ID. Neither flow performs checksum-based duplicate detection or automatic merging.
+**Steps:**
 
-### Account-level updates and source replacement
+1. **Read the manifest.** If it's missing or damaged, don't wipe anything: rebuild it in full mode. Each file named `{contentId}.{ext}` (D-20) whose content ID is in the catalog and whose SHA-256 matches is adopted, with no download. This is also what makes a reinstall cheap: the songs already in the folder are kept.
+2. **Build the expected set** from the replica: every `ready` track's current content, plus this device's own pending syncs. Each entry has a file name, size and SHA-256.
+3. **List the account's folder.** Temp and staging files live in app-private storage, so everything in the folder is either expected or extra.
+4. **Compare** the folder, the manifest and the expected set, in quick or full mode.
+5. **Fix the differences.**
+   - **Missing or altered:** download the current content again (§7.9 step 4). If an extra file has exactly the expected size and SHA-256 (the user renamed it), rename it back instead of downloading. Without a connection, mark the song **Needs download**.
+   - **Extra** (a file added by hand, a leftover, or anything in the `Song Sleeve` root that isn't an account folder): delete it permanently, with no trash (D-21). Other accounts' folders are left alone.
+   - **Deletion safety:** extras are deleted **only after this session has caught up with the server** (§7.9 reached the latest cursor, or a full snapshot finished). Offline, or before catching up, the check repairs, renames and marks **Needs download**, but deletes nothing; deletions wait for the next check after catching up. This protects the folder from an empty or partial catalog, whether from a fresh install, a bug or an interrupted snapshot.
+   - **Large deletions ask first:** if one check would delete more than **20 files**, it stops and asks: **"Song Sleeve found {n} files that aren't synced songs. Delete them permanently?"** with **Delete** and **Keep for now**. **Keep for now** leaves the files and asks again on the next manual check; automatic checks don't ask again in the same session.
+   - **Exceptions:** the pinned (playing) file is fixed when its pin is released. This device's in-progress syncs are never removed.
+6. **Write the manifest** with the result and the check time.
+7. **Report.** A manual run shows the counts. Automatic runs only log, unless something can't be fixed or the large-deletion question is pending.
+8. **Before a source change** (§7.7), the replacement starts only after the check finishes without an unresolved error for that song.
 
-Track metadata changes require online server acceptance for synced and unsynced songs alike; disconnected attempts return an error and are not applied or queued. The account-level update flow is: a user makes an explicit app change, the API accepts the document revision and appends a per-user catalog event, and other running devices apply that event through the Device Sync Service, with native background execution when permitted and resume/reconnect/open catch-up otherwise. A suggested endpoint such as `GET /me/catalog/changes?cursor=...` returns paginated track updates and deletions for the whole account. Advance the device catalog cursor only after applying a page successfully. The existing cloud manifest describes verified audio availability; it cannot replace the catalog change feed because unsynced tracks also need account updates. Connected devices now also receive server completion/catalog notifications and reconcile immediately; currently playing resources defer physical changes until playback finishes. Offline devices still converge at their next online open/reconnect.
+---
 
-The track document and the audio binary have different lifecycles. Renaming a song changes the document alone. Every confirmed source-file submission deletes the old content entity and creates a replacement with a new immutable ID, even when the selected file is identical; the track document replaces its content reference, while track ID, playlist memberships, group views, and library order remain intact. Neither a changed filename nor external file edits automatically establish a new accepted binary. Source refresh always rereads technical facts, even when the selected path is unchanged. Do not compare the candidate checksum to decide whether to reuse content: an explicit new source submission always creates a fresh entity. Checksums still validate integrity and expected bytes during transfer.
+## 8. Screens and player
 
-For a synced track, the current content ID maps to a verified Cloud Storage object and each installed device holds a local `Songs` mirror of that generation. Cloud Storage provides the controlled, recoverable binary; desktop/native playback still opens only the local mirror. A user-selected replacement is staged and verified before the account document points to it. An app-open metadata refresh may finish before its download: show the new account metadata with download readiness separately, and do not label an older local binary as the current generation. The previous content entity is deleted and unavailable for new playback after the replacement event. An already-playing local resource is the exception: keep it pinned with the update notice until the session ends, then remove its mirror and apply the replacement. If the new content is not installed yet, show `needs_download` for the next playback. A failed candidate before acceptance preserves accepted content; a failed later-device download does not revive retired content. Web keeps its one-selected-song full fetch behavior.
+### 8.1 Visual tokens
 
-For an unsynced track, the current content ID describes the file last accepted through the app, but the actual file remains in the selected device-local location and may change externally. The account still receives all metadata changes. If device A confirms a new source, device B receives the new content reference but cannot download an unsynced binary from cloud. Validate its already-selected local source against the new accepted facts before resolving it to that reference; if missing or mismatched, mark it `needs_relink`. Receiving account changes or validating an existing local source does not submit another file or create content. If the user explicitly selects/confirms a source file on device B, that is a new replacement operation with a fresh content ID, even for matching bytes. Merely opening the app or observing an external change never performs a replacement.
-
-In the source-update modal, current Name and Artist remain in their inputs. Offer the selected file’s embedded title or filename without extension as a clickable suggestion below Name, like the optional artist suggestion/select. Clicking a suggestion fills the input; the user can also edit manually. Confirmation always refreshes validated duration, byte size, media format, and checksum from the selected file. Name and artist update only from the confirmed input values; ignoring a suggestion preserves the current values, and artist may remain empty. Cancelling keeps the accepted document and source unchanged. This differs from initial import, where Name has no prior value and is prefilled from the file. For an unsynced song, source replacement preserves cloud sync Off; the modal’s **Sync this song to cloud** option stays Off unless the user explicitly toggles it on. Saving a source alone updates the track document/local locator and creates no cloud upload job, even if the song belongs to an enabled playlist, group, or library scope. The source-update API must preserve the cloud preference; only an explicit user cloud-sync action can re-enable uploads.
-
-These rules settle cross-device metadata propagation and manual source replacement. **Pause automatic uploads** preserves existing cloud copies; **Unsync and remove audio** is a separate confirmed operation that removes cloud audio and its app-controlled local mirrors. The track document remains with `needs_source` until the user selects a local file or deletes the track. Never automatically return to an old original path. Cleanup and recovery follow the explicit-unsync flow in User flows.
-
-## Storage, API, and playback behavior
-
-The import dialog lets the user choose **Copy into Song Sleeve** or **Keep in original location** for local files. Copy mode duplicates audio into `Songs`, which is the sole active local source; any origin label is optional provenance. Link mode records and plays from the original URI/path without copying; moving or renaming the source breaks the link until the user relinks/resyncs it. Drive-origin songs and files downloaded from the optional cloud bucket are stored together in `Songs` for offline playback. A local-only track has no Railway object. When cloud sync is explicitly enabled, stage the current content version in a private per-user namespace such as `users/{userID}/songs/{contentVersionID}`. This object is the synchronization copy, not the native/desktop playback source. Keep cloud keys flat and independent of playlists; PostgreSQL stores the optional cloud object key on the current content-version row. A provider interface keeps cloud storage replaceable if hosting needs change.
-
-On native Capacitor, local-file import offers both modes: managed copy writes the song to `Songs`, while linked mode records the selected file locator in SQLite and reads from the original. In linked mode, warn that moving or renaming the file requires relinking/resyncing it. Drive-origin songs are downloaded to a temporary file, verified, then atomically placed in `Songs` because playback must remain local and streaming is out of scope. On web, linked mode requires a persistent file handle; if the browser cannot retain one, explain the limitation and ask the user to choose copy mode. Copy mode stores bytes in OPFS so they remain available after the picker session ends. Submit import/source/metadata changes to PostgreSQL through Gin only while connected and authenticated; apply accepted results locally and reject disconnected saves without an offline queue. Local-only audio still stays off the bucket unless cloud sync is explicitly enabled. If the user confirms a scope, the Gin API creates a staged content-version/object record and returns a short-lived presigned upload URL. The client uploads directly to the private Railway bucket, avoiding whole-song buffering in the API and Railway service egress for that transfer. Use multipart upload for large files and resumable job state. Keep playback on the selected local source while upload is pending. On desktop/native, first copy the selected source into a temporary file under `Songs`, verify it, and atomically install it; then upload those exact bytes. After the cloud copy verifies, that local `Songs` file remains the active playback location. The bucket object is only for synchronizing/restoring that file on installed clients; it is not streamed during native/desktop playback. Clean up abandoned staging objects.
-
-Playback resolves through `device_song_locations`. Local-origin songs in link mode play from the selected path/URI; songs in copy mode play from their managed file in `Songs`. Drive-origin songs play from their downloaded file in `Songs`. For a cloud-synced track on desktop/native, the active playback location is always its verified local file in the shared `Songs` directory. Startup reconciliation downloads missing/changed content from the bucket into a temporary file, verifies it, then atomically installs it in `Songs` and updates the local map. Native playback never fetches audio directly from the bucket. Web is the exception: it fetches only the selected complete song into the active Blob resource. Syncing does not delete the original external file; after the local `Songs` copy is established, that original is no longer the active source. Explicit unsync removes the cloud copy and its controlled local `Songs` mirrors, leaves the track marked `needs_source`, and requires manual local-file selection or track deletion. Pausing automatic uploads retains copies. Use persistent app data/library storage, not purgeable cache. Capacitor Filesystem documents persistent `Data`/`Library` and purgeable `Cache` directories; File Transfer can download to a device path with progress events. Android's Storage Access Framework and Apple's security-scoped document URLs have scoped access semantics, so platform URIs must be validated on launch and cannot serve as universal paths across devices. [Capacitor Filesystem](https://github.com/ionic-team/capacitor-filesystem/blob/main/README.md), [Capacitor File Transfer](https://github.com/ionic-team/capacitor-file-transfer), [Android document and file access](https://developer.android.com/training/data-storage/shared/documents-files), [Apple security-scoped file URLs](https://developer.apple.com/documentation/foundation/nsurl).
-
-For Capacitor, create an app-private persistent `Songs` directory inside `Data` or `Library` for managed copies, Drive imports, and cloud-synced files; maintain its local SQLite index and reconcile all cloud-synced tracks against the cloud manifest at every app open, downloading only missing or changed versions. For cloud-synced tracks native playback reads only from this `Songs` directory; local-only tracks continue using their selected import source. For the Vercel web client, linked mode depends on persistent file handles/permissions; if unavailable, direct the user to copy mode. Store user-selected managed copies and explicit offline downloads in OPFS with their map in IndexedDB. Keep ordinary cloud playback in one transient active-track buffer (for example, a fetched `Blob` and object URL), then release it on track switch; never store that transient buffer as the offline copy. Inspect quota and request persistent origin storage where supported. Browser-managed files are quota-bound and may be evicted, so show storage health and never claim the same durability guarantee as native app-private storage. [MDN Origin Private File System](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system), [MDN storage quota and eviction](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria).
-
-A route-independent React player controller owns the current track, playback queue, position, duration, play/pause, seek, shuffle, and repeat. Mount it in the signed-in app shell with a persistent bottom mini-player; opening the full Playing screen changes only the view, not the media element or playback state. Desktop/native clients resolve unsynced tracks to their selected local source and synced tracks to their local `Songs` file; they never stream audio from the bucket. Capacitor adds background playback and media-session controls while the app is backgrounded or the device is locked. The web player resolves linked files or OPFS copies locally. For cloud-backed tracks, it fetches only the selected full song as one Blob-backed active media resource and starts after the response completes; changing tracks clears and releases that resource. Switching can pause while the next full fetch completes. Synced desktop/native tracks are playable offline from local `Songs` after startup reconciliation; web cloud tracks are offline only after **Download for offline** stores them in OPFS.
-
-### Now Playing and system media controls
-
-The mini-player and Playing screen are React views; lock-screen, notification, headset, and browser media controls belong to the platform playback integration. Keep one route-independent logical playback controller as the source of queue and UI state. It sends commands to one playback engine through a platform adapter and publishes engine events back to the React views. Do not create a second audio engine in a screen or a second native engine solely for system controls.
-
-On the web, use an HTML audio element for playback and the browser Media Session API where supported. Publish the current title, optional artist, playback state, duration, and position; map supported play, pause, previous, next, and seek actions to the shared controller. Browser and device support varies, so the app’s own controls remain available if system integration is absent. The web UI keeps its existing one-complete-song-at-a-time behavior for cloud playback.
-
-On Capacitor, bridge the same logical controller to a native background-capable player/session. Android should use a Media3 `MediaSessionService` so playback and its system notification continue outside the WebView. iOS should configure background audio and use `MPNowPlayingInfoCenter` for metadata/progress plus `MPRemoteCommandCenter` for remote commands. A Capacitor audio-player plugin such as Capawesome Audio Player is an evaluation candidate; its documented integration requires a paid license. Otherwise, implement a focused Capacitor plugin around the native media APIs. Verify that the chosen native player itself owns playback and system commands; avoid combining independent player and media-session plugins unless they demonstrably control the same engine.
-
-Forward play/pause, previous/next, and seek events from the operating system to the shared controller, then reflect resulting position, duration, track, and playing state in React. Send the optional artist only when present; until artwork is implemented, use the existing placeholder cover in the app and omit cover artwork from system metadata. Keep shuffle and repeat-current-song controls in the app unless a platform exposes suitable system actions. The controller must enforce repeat-current-song and turn repeat Off whenever the track changes, regardless of whether a change came from React, a headset, or system controls. Use the selected local source on installed clients; playback commands do not require a server connection.
-
-The native player must remain the owner of active playback while the WebView is suspended. It must also preserve the current file/resource until playback ends when a sync replacement or unsync is pending, then apply the already-defined safe-boundary behavior. Account deletion remains the immediate-stop exception. Include lock-screen/notification controls, Bluetooth/headset actions, backgrounding and device-lock behavior, metadata/position updates, repeat reset on externally-triggered track changes, interruptions, missing linked-file errors, pending replacement at end-of-track, and cleanup on logout/deletion in the mobile spike. Browser Media Session support, plugin licensing/version compatibility, and desktop system-media integration require separate capability checks.
-
-Sources: [MDN Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/MediaSession), [Android Media3 background playback](https://developer.android.com/media/media3/session/background-playback), [Apple remote commands](https://developer.apple.com/documentation/mediaplayer/mpremotecommandcenter), [Apple background audio and Now Playing](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/MediaPlaybackGuide/Contents/Resources/en.lproj/RefiningTheUserExperience/RefiningTheUserExperience.html), [Capawesome Audio Player](https://capawesome.io/docs/sdks/capacitor/audio-player/).
-
-### Approved song limits
-
-Every song admitted to the library must satisfy **both** limits on **web, mobile, and desktop**, whether its source is local, Google Drive, a managed copy, a linked original, or optional cloud storage.
-
-| Property | Approved inclusive maximum |
-| --- | --- |
-| Duration | **30 minutes = 1,800 seconds** |
-| Actual file size | **128 MiB = 134,217,728 bytes** (approximately 134.218 MB) |
-
-Measure the complete file, including headers, embedded metadata and artwork; bitrate-based estimates and rounded UI durations do not determine admission. Duration must be positive and finite, and the file must be readable supported audio. Unknown/invalid duration or size is a validation error until metadata extraction succeeds. Exactly 1,800 seconds and 134,217,728 bytes are allowed; exceeding either limit rejects the file. There is no native-only or cloud-only exception for larger/longer songs and no automatic trimming/transcoding.
-
-**Import and source replacement:** validate each Add songs row before submission and explain which limit failed. Invalid rows cannot be confirmed; users may remove them and import eligible selections. Apply the same checks to manual source updates, relinks, post-unsync local-source recovery, copy/link modes, and Drive downloads. An invalid replacement must not change the current track document/content ID, locator, artist, or memberships and must not delete the accepted audio. Remove uncommitted staging while leaving external originals untouched. A newly selected valid source still follows the existing fresh-content-ID rule and online-only server acceptance.
-
-**Server and storage enforcement:** maintain one shared policy exposed by Gin, for example through `GET /me/media-policy`, containing `max_duration_seconds: 1800` and `max_file_bytes: 134217728`; clients use the server policy and return clear errors such as `song_too_long`, `song_too_large`, or `invalid_audio_metadata`. Gin checks submitted technical facts for imports/source updates and rejects over-limit requests before catalog acceptance or upload grants. Unsynced audio remains local, so the server cannot independently probe its binary; its metadata validation relies on the client's extraction until cloud sync. Before a cloud upload/replacement becomes ready, the verification worker independently checks actual object length and audio duration against these limits; unverified/over-limit objects never enter the ready manifest. Failed validation cleans staged objects with retries and preserves any previous accepted content. The limits apply per song, not to the total library or group/playlist transfer size.
-
-**Transfers and external changes:** enforce actual received byte counts during Drive import, cloud restore, and web full-song fetch even when Content-Length is missing or inaccurate; cancel over-limit transfers and remove partial staging. Browser quota/free space and supported codecs still need separate checks. For externally changed linked originals, the saved track stays unchanged and source health needs attention; changed bytes must not be accepted or uploaded automatically. A manual refresh must pass the same limits before it can replace content. Native/desktop still play only local files; web still waits for one entire selected encoded song before playback.
-
-**Implementation validation:** test exactly-at-limit files, one-byte and subsecond duration excess, combined violations, metadata/artwork that pushes total size over the cap, missing/incorrect declared facts, unknown duration, every import/source mode, invalid replacement preservation, oversized transfer cancellation, cloud rejection/cleanup, and low-resource browser playback within the allowed envelope. Song limits are approved; checklist item 8 remains open only for implementation/codec/resource validation.
-
-### Web song size and browser capacity
-
-Research checked 2026-10-07. Use **3–5 minutes** as an ordinary-song test baseline, **10–30 minutes** for longer tracks, and **60 minutes** as a stress case. Chartmetric's 2024 chart sample most commonly falls between 2:51 and 3:09, but genre and personal libraries vary; these fixture ranges are engineering choices, not a universal average. [Chartmetric original report](https://reports.chartmetric.com/2024/chartmetric-year-in-music-2024).
-
-Calculated audio payloads below exclude embedded metadata, artwork, headers and padding. Lossy bytes equal seconds × actual average bitrate ÷ 8; PCM bytes equal seconds × sample rate × bits/sample × channels ÷ 8. **1 MB = 1,000,000 bytes; 1 MiB = 1,048,576 bytes.** Measure actual size, especially variable bitrate and FLAC, which has no fixed compression ratio. [Fraunhofer MP3 and AAC](https://www.iis.fraunhofer.de/content/dam/iis/de/doc/ame/conference/AES-17-Conference_mp3-and-AAC-explained_AES17.pdf), [Apple 256 kbps AAC benchmark](https://www.apple.com/apple-music/apple-digital-masters/), [FLAC bitrate FAQ](https://www.xiph.org/flac/faq.html#general__lowest_bitrate).
-
-| Duration / encoding | Audio payload MB | Audio payload MiB |
+| Token | Color | Role |
 | --- | --- | --- |
-| 5 min, 128 kbps | 4.80 | 4.58 |
-| 5 min, 256 kbps | 9.60 | 9.16 |
-| 5 min, 320 kbps | 12.00 | 11.44 |
-| 10 min, 320 kbps | 24.00 | 22.89 |
-| 20 min, 320 kbps | 48.00 | 45.78 |
-| 30 min, 320 kbps | 72.00 | 68.66 |
-| 60 min, 320 kbps | 144.00 | 137.33 |
-| 5 min, stereo PCM WAV 16-bit / 44.1 kHz | 52.92 | 50.47 |
-| 10 min, stereo PCM WAV 16-bit / 44.1 kHz | 105.84 | 100.94 |
-| 30 min, stereo PCM WAV 16-bit / 44.1 kHz | 317.52 | 302.81 |
-| 5 min, stereo PCM WAV 24-bit / 96 kHz | 172.80 | 164.79 |
-| 30 min, stereo PCM WAV 24-bit / 96 kHz | 1036.80 | 988.77 |
+| `color-background` | Graphite `#2D2D2A` | App background |
+| `color-surface` | Charcoal `#4C4C47` | Panels, cards, navigation, player bar |
+| `color-secondary` | Sand Dune `#E5DCC5` | Secondary emphasis, selection, progress |
+| `color-primary` | Blaze Orange `#F26419` | Primary actions, active controls |
 
-**Approved product rule:** songs must be at most **30 minutes AND 128 MiB (134,217,728 bytes)** across web, native, desktop, imports, source replacements, and cloud sync. Both checks must pass; see [approved song limits](#approved-song-limits) for enforcement. This admits 30-minute 320 kbps audio and ten-minute CD PCM WAV before overhead; it excludes five-minute high-resolution WAV, 30-minute CD PCM WAV, and 60-minute songs. The larger examples below/above are capacity and rejection fixtures, not supported admission exceptions. Browser tests still need to verify resource behavior within the limits.
+Contrast rules:
 
-| Browser / platform | OPFS availability and writer | One 128 MiB file | What is unsupported or needs a fallback |
-| --- | --- | --- | --- |
-| Chrome desktop | Root/read and async writer from 86; worker writer from 102 | Conditional support | Older APIs, unavailable storage, insufficient space, or unsupported codec |
-| Edge desktop (Chromium) | Compatibility follows Chromium; detect actual APIs | Conditional support | Same runtime restrictions; quota is not playback memory |
-| Chrome Android | Root/read and both writers from 109 | Conditional support; device tests required | Older versions; low resources; original picker depends on version |
-| Edge Android (Chromium builds) | Detect bundled engine/root/read/write APIs; no dedicated BCD version row | Conditional when APIs are present | Do not infer engine version from installed Chrome |
-| Firefox desktop and Android | Root/read and both writers from 111 | Conditional support | Persistent original-file picker unsupported; use copy mode |
-| Safari macOS and iOS/iPadOS | OPFS APIs recorded from 15.2; dedicated-worker writer before 26; async writer from 26 | Conditional with correct writer | Safari 15.2–18 cannot use an async-only OPFS writer; persistent original picker unsupported |
-| Chrome / Edge / Firefox on iOS | WebKit builds follow installed WebKit; alternative-engine builds need runtime checks | Conditional on actual engine and APIs | Desktop brand/version does not establish iOS engine, quota, or picker support |
+- **Allowed:** white on Graphite (13.81:1) or Charcoal (8.63:1); ink `#161615` on Sand (13.26:1) or Orange (5.70:1).
+- **Not allowed:** white on Orange (3.18:1); Orange text on Charcoal (2.72:1).
+- **Links** use Sand (6.32:1) or white.
+- **State** is never shown by color alone.
 
-These are **API-capability inferences, not hardware tests or guaranteed file limits**. Current major engines conditionally support one 128 MiB stored file; none guarantees full-track playback on every device. Even 500 MiB can be storable with enough effective capacity, but quota is aggregate storage, not a per-file promise or RAM budget. Safari 15.2–18 needs the dedicated-worker `createSyncAccessHandle()` writer; Safari 26 adds the async writer. Earliest root/read entries do not certify the complete pipeline; WebKit's original article records some reading behavior at macOS 12.4/iOS 15.4. Missing original-file pickers in Firefox/Safari require copy mode, not a claim that OPFS is unsupported. Verify actual engine APIs on iOS instead of inferring desktop capabilities. [StorageManager compatibility](https://github.com/mdn/browser-compat-data/blob/main/api/StorageManager.json), [FileSystemFileHandle compatibility](https://github.com/mdn/browser-compat-data/blob/main/api/FileSystemFileHandle.json), [WebKit Safari 26](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/), [WebKit OPFS introduction](https://webkit.org/blog/12257/the-file-system-access-api-with-origin-private-file-system/), [Apple alternative engines](https://developer.apple.com/support/alternative-browser-engines/).
+Typography, spacing, icons and motion are still to be defined.
 
-For OPFS copies/offline downloads, feature-detect root/read/write, probe write/read/delete, inspect approximate quota/usage, and reserve space for staging, the old copy and other origin data. Handle write-time `QuotaExceededError`, denied persistence, private restrictions, low disk and eviction. Remove incomplete staging on failure/cancel; missing cached bytes become **Not downloaded** while catalog metadata remains. Persistence reduces automatic eviction but cannot prevent user clearing or guarantee durability. Chromium commonly budgets up to 60% of total disk per origin; Firefox best-effort uses the smaller of 10% disk or 10 GiB; Safari 17+ browser origins use up to approximately 60%. These are not free-space reservations. `localStorage`'s approximately 5 MiB string limit makes it unsuitable for song bytes; Capacitor native filesystem storage is separate. [Mozilla quota/eviction](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria), [WebKit storage policy](https://webkit.org/blog/14403/updates-to-storage-policy/), [Google OPFS guide](https://web.dev/articles/origin-private-file-system).
+### 8.2 Navigation and list content
 
-Preserve the web rule: fetch the **entire selected encoded song before playback**, own one Blob/object URL, and use an HTML audio element. Blob data can be browser/disk-backed; encoded size is not a guaranteed RAM budget. Avoid full-file ArrayBuffer/Base64 duplication, full-song `decodeAudioData()` and retained chunk copies; a decoded 30-minute 44.1 kHz stereo float32 buffer alone is 635.04 MB / 605.62 MiB. Validate duration/actual size/codec, enforce actual received bytes during download even with incorrect/missing Content-Length, cancel obsolete loads, and release URLs/references on switch/failure. Transport progress/chunks do not authorize progressive playback. Do not prefetch, hold a second replacement Blob, or persist ordinary cloud playback. Defer a server-notified replacement until current playback finishes. [Chromium Blob design](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/storage/browser/blob/README.md), [W3C AudioBuffer](https://www.w3.org/TR/webaudio/#AudioBuffer), [Blob URL cleanup](https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/blob), [Fetch body specification](https://fetch.spec.whatwg.org/#body-mixin).
+Before sign-in: Start → Login/Register → Password recovery. On the web, these screens serve only allowlisted accounts (R-WEB-ACCESS); any other account gets `web_app_unavailable` with links to the landing page's downloads. After sign-in: Home, Library, Songs, Artists and Profile. A persistent player bar is mounted in the app shell, above the bottom navigation and safe areas.
 
-Separate codec support from storage success: MP3 is a practical baseline; AAC/M4A, PCM WAV and FLAC require exact format/runtime checks and decoding-error handling. Show progress/cancel and full-fetch delay: 72 MB takes an ideal 57.6 seconds at 10 Mbps; 128 MiB approximately 107.4 seconds before overhead. Test low-resource Android/iPhone and desktop engines, boundary sizes, 60-minute and 256/500 MiB stress cases, repeated switching, backgrounding, quota/eviction and malformed files to validate the approved limits. Over-limit fixtures must be rejected without damaging accepted content. Topic 8 remains unchecked for implementation/codec/resource tests. See the [full browser-capacity report](research/reports/Song%20sizes%20and%20browser%20limits.html) and [research notes](research/research_notes/Song%20sizes%20and%20browser%20limits/browser_storage.html). [Mozilla audio formats](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Audio_codecs).
+In installed apps, lists merge the server replica with this device's local songs and overlay entries (R-ORG-6), and local songs carry an **On this device** badge. On the web, lists show only synced songs and are paginated.
 
-### Railway storage options for song files
+### 8.3 Screen requirements
 
-Railway offers attached volumes and S3-compatible Storage Buckets. Use a **Storage Bucket** for the optional cloud song datalake. Only songs users opt into cloud sync consume bucket capacity. Buckets are private, support presigned URLs and multipart uploads, and cost $0.015 per GB-month with no bucket API-operation or bucket-egress charge. A 40 TB cloud library is about $600/month for storage alone, before PostgreSQL, API/worker compute, backups, and import-transfer costs. Railway's Hobby plan caps combined bucket capacity at 1 TB; Pro currently has no stated capacity cap. Recheck plan limits and pricing before launch. [Railway Storage Buckets](https://docs.railway.com/storage-buckets), [Bucket billing](https://docs.railway.com/storage-buckets/billing).
-
-Direct client uploads and device downloads are the preferred optional cloud path. Bucket egress is free, but data uploaded from a Railway service to a bucket counts as that service's network egress. Google Drive bytes relayed by a Railway worker therefore have service-transfer cost; measure this separately. Device downloads go directly from the bucket to the client and do not use Railway service egress, though they consume the user's network data and device storage. Local-only imports do not consume bucket capacity or transfer. Railway Buckets are reached over the public network and do not currently use Railway private networking. Configure bucket CORS for the Vercel production domain, any allowed preview domains, and the Capacitor origins. Never expose bucket credentials in Vercel variables or the mobile bundle; only trusted backend services may use them, and only the Gin API issues user-facing presigned URLs. [Railway file upload and delivery patterns](https://docs.railway.com/storage-buckets/uploading-serving), [Railway private networking and egress](https://docs.railway.com/storage-buckets/billing).
-
-An attached Railway Volume is a mounted filesystem, not a horizontally scalable object datalake. It is tied to a service and region, has plan-dependent size limits, and Railway documents that volumes cannot be attached to replicated services. Volumes can be useful for PostgreSQL's data directory, temporary processing, or a small single-instance self-hosted deployment; they are a poor optional cloud song store for this multi-device app. Do not save songs to a service's ephemeral filesystem because it is lost across deployment/restart lifecycles. [Railway Volumes](https://docs.railway.com/volumes), [Railway volume limits](https://docs.railway.com/volumes/reference).
-
-Railway documents encryption at rest for bucket objects, while configurable S3 server-side encryption settings, object versioning, object locks and lifecycle rules are unsupported. Encryption at rest does not establish application-owned keys or account-specific cryptographic erasure. Railway explicitly provides no automatic bucket backups/snapshots, and buckets use the public network only. Keep PostgreSQL backups separate, and plan periodic object inventory/checksum verification plus a second copy before users rely on cloud as their only recovery source. This adds cost. Bucket regions include California (`sjc`), Virginia (`iad`), Amsterdam (`ams`) and Singapore (`sin`); region cannot change after creation and no Brazil bucket region is listed. Benchmark sync/import transfer times from target networks before choosing. [Railway bucket feature support and FAQ](https://docs.railway.com/storage-buckets), [official FAQ source](https://raw.githubusercontent.com/railwayapp/docs/main/content/docs/storage-buckets.md), [Railway bucket regions](https://docs.railway.com/cli/bucket).
-
-#### Provision and configure the bucket
-
-Create a separate bucket in each Railway environment from the project canvas (**+ New → Bucket**) or with the Railway CLI. Select the bucket region deliberately because it cannot be changed later. Current CLI region codes are `sjc`, `iad`, `ams`, and `sin`. In the bucket's **Credentials** tab, use Railway's variable references to inject credentials only into the Gin API and worker services. Map them to application settings such as `S3_ENDPOINT` (`ENDPOINT`), `S3_BUCKET` (`BUCKET`), `S3_REGION` (`REGION`, currently `auto` for S3 signing), `S3_ACCESS_KEY_ID` (`ACCESS_KEY_ID`), and `S3_SECRET_ACCESS_KEY` (`SECRET_ACCESS_KEY`). Use the API bucket name supplied as `BUCKET`, not the display name or `RAILWAY_BUCKET_NAME`. Railway uses virtual-hosted S3 URLs for new buckets; follow the URL style shown in the Credentials tab. [Railway bucket setup and credentials](https://docs.railway.com/storage-buckets), [Railway CLI bucket commands](https://docs.railway.com/cli/bucket).
-
-Use the AWS SDK for Go v2 S3 client behind a small `ObjectStore` interface. Configure its S3 `BaseEndpoint` from `S3_ENDPOINT`, region from `S3_REGION`, credentials from Railway's access-key variables, and virtual-host addressing according to Railway's provided URL style. Keep this provider-specific configuration in one constructor so the same interface can use a local S3-compatible service in development and a different bucket provider later. Do not replace the SDK's S3 endpoint resolver unless a compatibility test proves the default resolver cannot handle the provided endpoint. [AWS SDK for Go v2 custom endpoints](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configure-endpoints.html), [AWS SDK for Go v2 S3 presigned URL examples](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/go_s3_code_examples.html).
-
-Configure bucket CORS for the exact web origins that need direct upload or sync download: production Vercel domain, a stable staging/preview domain, and the Capacitor web origin(s). Allow only required methods (`PUT`, `GET`, `HEAD`) and request headers (for example `Content-Type` and the checksum headers actually used); expose response headers the client needs, such as `ETag`. CORS is a browser policy, not authorization: every upload/download URL must still be short-lived and scoped to one server-generated object key. Keep bucket credentials on Railway and never return them to clients. [Railway browser upload and CORS guidance](https://docs.railway.com/guides/storage-buckets-guide).
-
-#### Use the bucket for optional cloud upload, download, and cleanup
-
-1. When the user confirms a scoped sync from Songs, a group, or a playlist, authorize ownership, save/enable the matching `cloud_sync_scopes` row, resolve membership, deduplicate track IDs and create a durable snapshot job. For each accepted content version needing upload, acquire its user/track operation slot. Generate an opaque operation-attempt staging key, such as `users/{userID}/staging/{operationID}/{attemptID}`, never a raw filename or final content key. Return a short-lived presigned `PutObject` URL or tested multipart instructions for that staging key only. Clients upload directly and report completion without bucket credentials. Future scope members queue automatically; overlapping scopes share one verified cloud copy of the accepted content. Automatic transfer does not create a new content entity.
-2. On completion, a trusted worker verifies actual staging bytes before readiness: inspect object metadata, spool a bounded temporary file, count total bytes, calculate the expected checksum and probe positive finite duration against 30 minutes AND 128 MiB. Multipart ETags are not SHA-256. A reusable client PUT can overwrite staging even after probing; never publish by an unguarded verify-then-COPY. Proposed safe baseline: upload the exact verified temporary bytes to a fresh final key under `users/{userID}/songs/{contentVersionID}` that has never received a client PUT grant, verify final bytes, then recheck operation/source/account fences and commit readiness, the authoritative content reference/snapshot and the manifest event. Conditional copy is an optimization only after Railway compatibility and final verification tests. Native/desktop playback remains local `Songs`. Clean failed staging and incomplete multipart work with retryable jobs; final worker upload adds service egress. [Presigned URL reuse/overwrite semantics](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html), [Railway supported operations](https://docs.railway.com/storage-buckets).
-3. For installed desktop/native sync, resolve each content-version ID through PostgreSQL, enforce ownership, and return a short-lived presigned `GetObject` URL for the ready cloud object. Download missing/changed files to a temporary path, verify them, and atomically place them in the shared app-managed `Songs` directory. Run this manifest reconciliation at every app open and retry interrupted transfers. Native/desktop playback uses only the verified local file, never the object URL. Web does not run full-library download sync; it fetches one selected cloud song at playback time.
-4. Store the final opaque key and verification facts in the current content entity; `tracks` remains the authoritative snapshot and source descriptor. Every newly confirmed source submission replaces old content with fresh content after validation, even for identical files; retries reuse the same operation. On delete/unsync, stop new grants, drain/expire issued capabilities, abort multipart work and remove final/staging objects through resumable cleanup inventories. Re-scan late writes before declaring physical cloud cleanup complete. Retry failures and reconcile orphan keys/missing objects; keep deletion work independent of already-deleted track/content rows. Separate device application respects playback pins and source revisions. Keep an independent recovery copy and remove account-addressable backups during deletion.
-
-## Google Drive integration and costs
-
-Use the original Google Drive API for Drive imports. Authenticate with OAuth, let the user select files, then download selected bytes into the device’s shared app-managed `Songs` directory by default. Record Drive file ID and metadata as provenance, not as the permanent playback location. Upload from device to Railway only after cloud sync is enabled. If a worker relays Drive bytes to a device or bucket, account for Railway worker egress and design the transfer as resumable.
-
-Google's current Drive documentation says standard API use is available at no additional charge, subject to quotas. Google says charges for usage above standard daily thresholds are planned for later in 2026, with notice before changes take effect. Uploading files into the user's Drive consumes that user's Drive storage; uploading them into the app's optional cloud datalake consumes object-storage capacity and transfer budget; keeping them local does not. Hosting PostgreSQL and the API also has separate infrastructure costs. [Drive usage limits and pricing](https://developers.google.com/workspace/drive/api/guides/limits).
-
-Use the narrowest OAuth scopes that support the chosen picker flow. The `drive.file` scope grants access to files the app creates or files the user explicitly opens or shares with it; it is not blanket access to the account's existing Drive. [Drive scope guidance](https://developers.google.com/workspace/drive/api/guides/api-specific-auth). Use resumable transfers and exponential backoff for interrupted uploads or rate limits. [Drive upload guidance](https://developers.google.com/workspace/drive/api/guides/manage-uploads).
-
-## Authentication and security
-
-Require verified-email authentication before normal account access and authenticated API access for catalog and media endpoints. Use a modern password hash, hashed opaque session/reset/verification credentials, server-side expiry/revocation, rate-limited login/recovery and generic email-request responses. Sessions remain valid for 30 days unless revoked; password recovery and irreversible deletion follow the flows below. Enforce user ownership in every database query and object-storage operation; knowing a track or object ID must not grant access. Revoke the matching server session on device logout and all sessions on **Log out all devices**. Use short-lived signed upload or download grants where appropriate, limit worker resources, and record import and sync failures without logging private file contents.
-
-### Session lifetime and credential storage
-
-A verified login creates a per-device opaque session token valid for **30 days (2,592,000 seconds)** from issuance. Store only its cryptographic verifier/hash server-side and return the raw credential once. Gin validates the session record, expiry and account-deletion gate on every request. Closing/reopening or minimizing the app does not end the session, and ordinary usage does not shorten its validity. This is an absolute lifetime: activity does not silently extend it; after expiry the user signs in to create a new 30-day session. Logout, password reset and deletion revoke access immediately, even before the expiry date. Normal authentication failure stops account writes/sync; it does not by itself delete local audio.
-
-Web keeps the credential in a **Secure, HttpOnly cookie**, with expiry matching the server session, a constrained domain/path, appropriate SameSite settings and CSRF protection for writes. Use same-site production web/API domains so sign-in does not depend on third-party cookies; preview environments need a tested equivalent domain/proxy setup. Installed clients keep their token in the OS secure credential store and attach it to authenticated requests; do not store normal session secrets in SQLite, IndexedDB or browser localStorage. Server enforcement and cookie controls follow [OWASP session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
-
-Revoking a session also stops its normal event stream and transfer-grant access. The client clears normal credentials and returns to authentication while retaining permitted local files unless deletion/purge was requested. A restricted cleanup credential is separate and cannot log in, read metadata/audio, or extend a 30-day session.
-
-### Password recovery
-
-From Login, **Forgot password?** opens an email input. `POST /auth/password/forgot` returns the same generic response regardless of whether an eligible account exists. For an existing non-deleting account, issue a cryptographically random account-bound token, store its hash with a **30-minute expiry**, invalidate previous reset tokens, and queue an HTTPS email link to the configured trusted web domain. The link grants only password-reset access, not a normal account session.
-
-The protected reset page validates its token through `POST /auth/password/reset/validate` before enabling New password/Confirm password. Validation/viewing does not consume it, so email previews cannot reset the password. Submit `POST /auth/password/reset` to recheck the token, expiry and deletion gate, validate the password, then atomically update the password hash, consume/invalidate reset tokens and revoke **all sessions**. Concurrent submissions can succeed only once. Signed-in devices lose server access immediately; connected clients receive a revocation notice when possible, and others learn on their next request. Reset alone does not delete downloaded songs. Show success and return to Login; no automatic session is created. This follows [OWASP password-reset guidance](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
-
-Keep the reset page free of third-party analytics/scripts, use `Referrer-Policy: no-referrer` and `Cache-Control: no-store`, and remove the token from the address bar after loading it into the restricted form state. Do not log reset links or raw credentials. Verification/reset email jobs use transactional enqueue, encrypted temporary link material, provider idempotency, and backoff until token expiry; expired links offer resend, and deletion cancels pending messages. Rate-limit request, validation and submission without locking an account merely because someone requested recovery.
-
-### Irreversible account deletion and device cleanup
-
-Deletion is available from Profile while online. Show the account, affected data and this warning before final approval: **“Permanently delete your account and library? This removes your cloud audio, song records, playlists, groups, artists and app-managed local copies. You will be signed out on every device. Once accepted, deletion cannot be cancelled or recovered. Offline devices are cleaned when they next connect and can run.”** Require the current password through `POST /auth/reauthenticate`; return a **single-use, 5-minute** proof bound to the account/session and deletion purpose. Only `POST /me/account-deletion` with that fresh proof and explicit confirmation starts deletion. The server rechecks both in the acceptance transaction; an expired/missing proof or failed connection creates no deletion request. A lost response is recovered by the original request ID/restricted status, never by submitting a second delete.
-
-**Non-cancellable means durable:** commit a unique account-deletion request and the account write/login gate together. Once accepted, no cancel/reactivate route exists and closing the requesting phone cannot stop the job. A Railway worker retries failed steps with backoff and resumes persisted checkpoints after process/service failure; transient errors keep the request pending. Do not hold one database transaction open for bucket transfers, spin indefinitely, or mark deletion complete after a retry limit. Serialize reset/delete acceptance under the account gate so a concurrent recovery or import cannot resurrect a deleting account.
-
-**Worker-queue recovery:** River is a proposed implementation option, not an approved dependency. Its default retry cutoff must never turn an unfinished deletion into completion: retain the independent deletion checkpoint, alert on stalled work and re-enqueue/recover incomplete requests through a sweep. Queue uniqueness also does not substitute for the domain's per-user/track operation slot. [River retry behavior](https://riverqueue.com/docs/job-retries).
-
-| Phase | Required behavior |
+| Screen | Requirements |
 | --- | --- |
-| Accept and revoke | Persist `account_deletion_requests` before deleting any user data; capture cleanup/notification destinations, revoke every session and reset/verification/reauthentication credential, block login, new catalog writes and media grants, and dispatch terminal deletion hints. The requesting client starts its own purge after acceptance |
-| Drain media work | Cancel/supersede queued imports/uploads/downloads for that account; stop active transfer workers and reconcile issued capabilities. Existing presigned URLs are not instantly revoked by deleting a session: retire/expire them, abort multipart uploads and remove late-written objects before declaring cloud cleanup complete. Deletion takes priority over normal per-track queues |
-| Wipe server-controlled data | Hard-delete all owned cloud/staging objects and addressable backup copies; remove content/source/provenance records, track metadata, playlist/group/artist records and associations, preferences, imports/scopes/jobs, change/outbox payloads, OAuth credentials, normal push registrations, sessions, mail jobs and mutation receipts. Keep only deletion-worker facts needed to finish safely; retries recheck inventories and do not depend on already-deleted tracks |
-| Delete user last | Delete the `users` row only after server media cleanup and owned relational data are gone. This is physical deletion, with no soft-deleted profile or recovery path. Retain the minimal deletion ledger and pending device-cleanup receipts independently of the user row; they are operational deletion proofs, not a restorable account |
-| Finish device cleanup | Each known native/desktop/browser installation purges its own account namespace on confirmed status, reports success, and retries incomplete deletion. Server completion and per-device cleanup completion are distinct; unreachable devices do not keep the server user row alive indefinitely |
+| Start | Welcome screen with **Log in** and **Register**, and a language switch (**English** / **Português (Brasil)**) used until login |
+| Login / Register | Registering with email and password creates the account and signs the user in, with a 90-day session; no verification email (R-AUTH-1). A taken email shows `email_unavailable` (R-AUTH-2). Password rules are shown under the field (R-AUTH-9). The terms checkbox is required (R-AUTH-10). Login creates a 90-day session. **Forgot password?** link. The language switch from Start stays available |
+| Password recovery | See §7.12. Success returns to Login without signing in |
+| Home | Three one-row previews (Songs, Groups, Playlists), newest first by creation time (D-36). Each has **See all**, which opens Library with that type selected. **Add songs** |
+| Library | Card grid, filtered by the saved type preference (R-ORG-7). **Create playlist** and **Create group** open name modals (online). Search |
+| Songs | Every song in library order, with search. Each row shows the name, the artist (linking to the Artist page), a status badge, a drag handle and a menu. Menu actions: **Edit**, **Add to playlist**, **Replace audio file**, **Sync to cloud** (local songs; **Coming soon** without cloud sync, R-CLOUD-8), **Try again** (failed syncs), and **Delete song**. The header also offers **Retry failed syncs** when any song in the list failed (D-25). **Add songs**. In installed apps the header shows **Sync to cloud** or a status, which opens the library scope modal |
+| Playlist detail | Songs in playlist order. The header has the scope action or status, rename, delete (the songs stay), and **Add to groups**. **Add songs to playlist** opens a searchable picker. The row menu has the Songs actions plus **Remove from playlist**. Other devices show only the playlist's synced songs |
+| Group detail | Playlists in group order. The header has the scope action or status (covering the songs of all its playlists), rename, and delete (the playlists stay). **Add playlists** picks playlists only. Row menu: **Rename playlist**, **Remove from group**, and **Delete playlist…**, which warns that the playlist leaves every group |
+| Artists | The account's artists, plus artist names used only by this device's local songs. An artist page lists that artist's songs in library order. Server artists can be renamed, and deleted when no song uses them |
+| Player bar | Placeholder cover, title and artist, play/pause. Tapping it opens Playing. Shows pending-change notices (R-PIN-1). On the web, shows loading progress while the whole song is fetched |
+| Playing | Placeholder cover, name and artist, a seek bar (elapsed and total time; disabled until the duration is known), play/pause, previous, next, shuffle, repeat-one, and the Songs menu actions. Previous and next are disabled at the ends of the queue. With nothing loaded, every control is disabled |
+| Settings (installed apps) | **Check Songs folder** runs the full folder check (§7.13) and shows its result: songs restored, extra files removed, songs that still need a download. Shows where the `Song Sleeve` folder is and warns: "Only synced songs belong here. Files you add here are permanently deleted, and files you change are restored." **Send crash reports** (on by default, D-35). Android also has **Download synced songs over mobile data** (off by default, D-30) |
+| Profile | Email. **Language:** English (default) or Português (Brasil), saved on the account; it applies on every device and to emails (D-14). Cloud storage: "x GB of 25 GB used", with a warning at 90% (R-LIM-5). Counts of synced songs and of local songs on this device, with the notice that local songs exist only on this device. Sessions, with per-device logout, **Log out all devices** and **Log out current session**. Installed apps also offer **Log out and remove from this device** (§7.12). **Change password** (R-AUTH-8). The email is shown but can't be changed (R-AUTH-7). **Delete account** (§7.11) |
 
-**Post-deletion lookup:** issue each installation a high-entropy cleanup-only credential while it still has a normal authenticated session; store only its verifier in `device_cleanup_receipts` and keep the client credential with that account's local control state. `POST /account-deletion/status` accepts this credential without a normal login and returns only the bound account's deletion state (`not_requested`, `requested`, `server_complete`) and its device cleanup receipt. It cannot look up arbitrary emails/account IDs or return profile/library data. This still works after sessions are revoked and the user row is gone. Keep unacknowledged receipts long enough for late devices; do not expire them with the 30-day session. A new registration using the same email has a new account UUID, so an old deletion never wipes the new account's files.
+### 8.4 Player
 
-**Device purge:** startup/resume/reconnect checks the restricted status before opening the retained account library; a terminal event/push also wakes the purge coordinator when permitted. On a confirmed request, persist a small `purge_pending` checkpoint outside the account database, stop playback immediately, close file handles/revoke Blob URLs, cancel OS/foreground transfers and block catalog recreation. Delete every app-managed `Songs` file for that account, copy-mode/Drive imports, staging files, SQLite/indexed catalog/location/configuration records, OPFS offline copies, account-owned Cache Storage entries and normal credentials. Clear linked locators/access grants but never erase user-owned external originals or Google Drive source files; those were not app-controlled copies. Quarantine/cancel late transfer callbacks and re-scan after cleanup so they cannot recreate deleted audio. Wipe only this account's namespace, preserving other accounts and shared static app assets.
+- **Queue:** starting playback snapshots the order of the list it started from (library, playlist or artist; R-PLAY-5…8). Installed apps read it from the replica; the web fetches it with `GET /me/queue-ids` (F-13). Shuffle keeps the current song in place (R-PLAY-5…8). Repeat follows R-PLAY-4, and songs that can't play are skipped (R-PLAY-3).
+- **Controller:** one controller, independent of routes, owns the queue, position, duration and modes. The player bar and the Playing screen both read from it, and navigating never reloads the media element.
+- **Accessibility:** drag ordering works with keyboard and touch, controls have labels, and status uses icons and text.
 
-After all physical removals succeed, submit `POST /account-deletion/ack` using the restricted credential. Retain only the cleanup checkpoint/credential until its idempotent acknowledgement succeeds, then erase them; failures retry on later execution. Merely logging out, receiving a 401/404, or failing to load a catalog is not deletion proof. An offline/suspended device cannot be remotely guaranteed to erase immediately; once it connects and executes, this flow guarantees the app attempts and verifies its own cleanup. Devices that never return, exported files and external originals are outside remote-erasure control. State that boundary in the confirmation rather than promise instantaneous erasure everywhere.
 
-**Backups and completion:** the ledger must survive backup restore, and restore procedures must reapply accepted deletion requests before serving restored data or issuing credentials. Never expose restoration for a deleted account. Per-account backup objects must be removed; shared infrastructure snapshots may retain historical bytes until provider retention expires, so immediate physical erasure from every snapshot is not guaranteed by ordinary row deletion. Define/test retention or cryptographic erasure before making that stronger claim. Minimal ledger/receipt retention follows outstanding device cleanup and restore windows; scrub working object lists and personal fields after server deletion completes.
+### 8.5 Landing page (public site, R-SITE)
 
-**Implementation checks (topic 9):** test 30-day boundary/explicit revocation, secure persistence across restarts, reset token expiry/reuse/concurrent submit and mandatory all-device logout, email retries, reauthentication expiry/reuse, cancel-before-confirm versus no-cancel-after-accept, worker interruption and late uploads, ordered hard deletion/user-last, status after user/session deletion, offline/expired-session desktop and browser/native cleanup, current playback interruption, multiple accounts, acknowledgement retry, late callbacks, and restore suppression. The lifecycle behavior is agreed; platform, worker and backup checks remain for implementation.
+The only public web page in this release (D-26). It lives in `apps/site`, separate from the web app, so it ships no app code, no API client and no session handling.
 
-## Repository and service shape
+- **Content:**
+  - What Song Sleeve is: a local-first music player for your own files.
+  - Features available now: local songs from files and folders, playlists and groups, artists with smart search, a persistent player with system media controls, English and Português (Brasil).
+  - **Cloud sync: coming soon.** Describes it without a date or sign-up.
+  - Screenshots of the desktop and Android apps.
+  - Supported formats (D-8) and platforms: Windows, Linux, Android. macOS and iOS "later".
+- **Downloads:** one button per build: the Windows installer, the Linux AppImage, the Linux `.deb`, and Android (Google Play or the APK, whichever is chosen at release, §10.2). The button matching the visitor's OS is highlighted; the others stay listed. Each shows the version and size. The files are hosted on GitHub Releases (D-28): buttons use stable `releases/latest/download/<asset>` links, and the release CI rebuilds the site with the version and sizes baked in, so the page still makes no API calls at runtime.
+- **Footer:** links to the Terms of Use and Privacy Policy, and a contact address (D-32).
+- **Legal pages (D-32),** in both languages, published on the landing site before anyone but the owner uses the app:
+  - **Terms of Use:** the user must own or have the rights to the music they add; Song Sleeve may remove content on a valid takedown request; a contact address for those requests.
+  - **Privacy Policy:** what is stored (account email, synced songs and their metadata, organization, device and session records, crash reports without song names or paths, D-35); that local songs never leave the device; that data is stored outside Brazil (Railway regions, §10.1); retention (sessions and events 90 days); how to delete the account (§7.11); the user's rights under Brazil's LGPD and a contact for them.
+  - The Google Play data-safety form is filled in from the Privacy Policy.
+- **Language:** English by default, with a Português (Brasil) switch; the browser language picks the first one.
+- **Constraints:** static and prerendered for search engines. No API calls, cookies, analytics or third-party scripts, and nothing stored (R-SITE). It never links to the web app (R-WEB-ACCESS).
 
-Keep the first backend as a modular Go application: Gin routes call services for accounts, catalog/artists/organization, optional cloud imports, storage, and synchronization. Local file import, location indexing, startup/event-triggered reconciliation, and playback run in the client. A route-independent Device Sync Service shares a durable local reconciliation coordinator with Capacitor native push/background-transfer adapters; the Railway dispatcher delivers committed events and mobile wake-up hints. Put PostgreSQL migrations and queries under version control. Keep the React client behind API and platform adapters so browser, desktop, and Capacitor code can call the same application operations while supplying different file-picker and playback implementations.
+---
 
-Deploy the React/Vite web client to Vercel. Deploy the Gin API and separate Go worker service(s), PostgreSQL, and Railway Storage Bucket in Railway. Keep API, database, worker, and bucket in the same supported region where available. Put credentials and OAuth secrets in Railway's encrypted service variables; expose only the public API base URL and non-secret feature flags as Vercel `VITE_*` build variables. Vite embeds these values in the browser bundle, so they are public. Do not place database URLs, bucket keys, signing secrets, or Google OAuth client secrets in Vercel's browser-visible `VITE_*` values.
+## 9. Platform adapters
 
-For local development, use PostgreSQL and an S3-compatible object store with the same adapter/configuration shape as Railway Buckets when implementing cloud sync. Local-only development should work with the object store disabled. Production needs TLS, authentication, backup and restore drills, object integrity checks, quotas, observability, and rate limits.
+<a id="now-playing-and-system-media-controls"></a>
 
-**Railway database operations:** PostgreSQL templates are unmanaged; backup, restore, tuning, monitoring and maintenance are operator responsibilities. PgBouncer, pgBackRest/WAL PITR and Patroni-based HA are optional configured deployments, not capabilities enabled by creating the basic PostgreSQL service. Start with bounded pgx pools; keep LISTEN/migrations on dedicated connections if transaction pooling is added. Define RPO/RTO and automate restore drills: volume daily/weekly/monthly backups retain 6/27/89 days, while optional PITR retains about four weeks of full backups. Keep the minimal deletion ledger independently recoverable and reapply it before restored traffic; old volumes/backups need explicit retirement and account-data retention policy. [Railway databases](https://docs.railway.com/databases), [PgBouncer](https://docs.railway.com/guides/connection-pooling-pgbouncer), [PITR](https://docs.railway.com/volumes/point-in-time-recovery), [volume backups](https://docs.railway.com/volumes/backups).
+### 9.1 Shared playback architecture
 
-### Deployment instructions
+One controller in `packages/core` sends commands to **one** playback engine through a platform adapter, and passes the engine's events back to React. Never run a second engine for system controls.
 
-1. Create separate Railway environments for staging and production. In each environment, create PostgreSQL. Create a Railway Storage Bucket when enabling the optional cloud-sync feature; keep its region aligned with the API/workers. Bucket instances and credentials are isolated per Railway environment, but their stored capacity is billed together across the workspace. The bucket region is fixed at creation, so choose it before importing real files.
-2. Deploy the Gin API as a Railway service from the backend directory or its Dockerfile. Bind to `0.0.0.0:$PORT`, expose `/health` returning 2xx when ready, configure Railway's healthcheck, and add a Railway domain or custom API domain. Keep PostgreSQL private and use Railway's internal `DATABASE_URL` reference.
-3. Deploy the Go worker as a separate service from the same repository/image with a worker start command. Give it database permissions and bucket access only when cloud sync is enabled, but no public web domain. Scale worker concurrency independently; do not run schema migrations concurrently from every API replica. Run migrations as a controlled pre-deploy/release step.
-4. Configure API and worker variables from Railway's references: PostgreSQL URL, S3 endpoint, bucket name, access key, secret key, region, allowed client origins, Google OAuth server secrets, transactional email provider credentials/from address, APNs provider credentials and FCM server credentials for native background wake-ups, and signing configuration. Keep email/auth/storage secrets on Railway; do not duplicate them into Vercel.
-5. Connect the repository to Vercel and set the web app's root directory (for example, `apps/web` in a future monorepo), framework preset Vite, install command, build command (`npm run build`), and output directory (`dist`). Vercel creates preview deployments for branches and production deployments for the configured production branch. Configure `VITE_API_BASE_URL` separately for local, preview/staging, and production. Enable SPA route fallback if client-side routes need it.
-6. Use same-site HTTPS production domains such as `app.example.com` on Vercel and `api.example.com` on Railway; they remain cross-origin. Configure Gin credentialed CORS for exact trusted web origins, CSRF checks on cookie writes and native request/session handling. Default `vercel.app`/`railway.app` domains are cross-site; do not rely on third-party cookies. Prefer a stable staging domain over arbitrary preview-origin access. Configure bucket CORS separately for exact upload/read origins and required PUT/GET/HEAD methods/headers. Presigned URLs remain short-lived bearer capabilities; staging PUT grants never authorize final accepted keys. [OWASP CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
-7. Build the native iOS/Android packages from the same React app with Capacitor and the platform toolchains. Set the production API base URL in the native build configuration. Native Capacitor requests do not use browser CORS in the same way, but origin allowlists and secure storage of login tokens still need platform-specific handling. Configure native APNs/FCM registration and handlers, iOS remote-notification/background-transfer capabilities, and Android WorkManager integration; verify push environment/application identifiers and session-owned registration with Railway. Keep push-provider server credentials off the client. Vercel hosts the web client; it does not host the native binary or Railway API.
-8. Before release, verify the authoritative-track flow: verify approved 30-minute/128 MiB boundary admission on web/mobile/desktop for local/Drive and copy/link imports, replacement/relink/recovery, server checks and cloud object verification; reject over-limit files and clean staging without replacing/deleting accepted audio; verify disconnected rename/artist/source/import/delete/membership/reorder/preference/sync attempts return an error, change no accepted local state, and are never replayed on reconnect; local playback/navigation still work; stale concurrent online writes fail their revision check; an in-flight response loss recovers request status without submitting another source replacement; unsynced external filename/byte/embedded metadata changes leave saved metadata unchanged; startup records only health; manually selecting the same or a new file refreshes size/duration/checksum without losing memberships; new file names/artists stay suggestions until accepted; ignored suggestions preserve existing values; cancelling leaves the document unchanged; an app rename on device A appears on running device B through its listener/background worker and on deferred/offline devices during catch-up, for both synced and unsynced tracks without transferring audio; an unsynced replacement updates the account document but leaves another device needing matching local bytes; verify the same track ID survives metadata edits, entirely different audio replacement, path-only relinking, cloud sync/unsync, and missing-source recovery; every newly confirmed source file deletes old content and creates a replacement with a fresh immutable ID, including identical-file/same-path/relink submissions; only the track’s reference changes, and replaying the same operation request ID does not generate a second replacement; verify retired content cannot start new playback, while an already-playing resource completes uninterrupted with a notice and deferred replacement/removal; test repeat boundaries, paused playback, multiple pending revisions, crash recovery, connected-device notifications, event/push-triggered minimized-mobile updates with no UI open, OS-deferred/missed-push catch-up, background-transfer interruption, token rotation/logout, foreground/background worker coordination, reconnect event replay, and queued same-track uploads/downloads/unsync across devices with only one active server operation; playlist references/order survive all those updates; failed synced replacements preserve the accepted generation; changed unsynced bytes block automatic upload until manual confirmation. Verify explicit-unsync preview/cancel/confirm for song, playlist, and group, affected shared-track warnings, cloud and controlled-local deletion, preserved metadata/memberships, missing-source recovery, web offline cleanup, delayed cleanup on disconnected devices, delete retries, overlap suppression, source replacement leaving cloud sync Off with no upload job, explicit toggle-on enabling a later upload, and protection of a newly selected local source from stale jobs. Then test staging end to end: playback continues during route changes and when opening/closing Playing; live elapsed/total timing and seeking; previous/next queue boundaries; shuffle behavior; repeat-current-song behavior and automatic reset when the track changes; empty-state disabled controls; current-track menu actions; placeholder cover icon; both local import modes, the link-mode warning and relink flow, startup reconciliation when linked files move/delete or access is revoked, native offline playback, and web cloud playback with metadata-only sync, one complete Blob-backed active-track fetch, no prefetch, URL/reference release on track switch, next-track loading delay, offline-download behavior, memory pressure, and network failures. Also test Songs/group/playlist scope resolution and confirmation, deduplication for songs shared across scopes, automatic upload of future members, status-indicator transitions, retry and scope pause without cloud deletion, resumable upload/download, second-device retrieval, checksums, insufficient space, 30-day session expiry/revocation, password-reset/logout-all and irreversible account/device deletion, CORS, and recovery from backups. Observe worker transfer egress as well as bucket storage.
+- System play, pause, previous, next and seek are routed through the controller, so R-PLAY-4 applies to them as well.
+- Send the artist only when there is one. Leave artwork out until covers exist.
+- Shuffle and repeat stay inside the app.
 
-Vercel documents Vite deployments and branch preview URLs; Railway documents private S3-compatible buckets, environment-specific bucket instances, `PORT`-based service healthchecks, and PostgreSQL private connectivity. [Vercel Vite deployment](https://vercel.com/docs/frameworks/frontend/vite), [Vercel deployment environments](https://vercel.com/docs/deployments/environments), [Railway deployments and healthchecks](https://docs.railway.com/deployments/healthchecks), [Railway PostgreSQL](https://docs.railway.com/databases/postgresql).
+<a id="web-song-size-and-browser-capacity"></a>
 
-**Hosting boundaries:** Vercel serves the Vite SPA; do not proxy audio through Vercel Functions, whose request/response payload limit is 4.5 MB. Native transfers and browser song loads go directly to the bucket using authorized grants, while persistent Go workers and event endpoints run on Railway. Test forced SSE reconnect/cursor replay, immutable final publication, per-track grant expiry, native session expiry and restoration followed by deletion-ledger replay before release. [Vercel Function limits](https://vercel.com/docs/functions/limitations), [Railway networking limits](https://docs.railway.com/networking/public-networking/specs-and-limits).
+### 9.2 Web
 
-## Delivery plan
+- **Playback:** an HTML audio element, plus the Media Session API where it's supported, following R-PLAY-2.
+  - Show progress and a cancel button while a song downloads. In ideal conditions at 10 Mbps, a 72 MB file takes 57.6 s and a 128 MiB file takes about 107 s.
+  - There is no gapless playback.
+- **Upload:** straight from the `File` object, using a staging grant and multipart upload. Show progress per song, and warn before the tab closes while uploads are running.
+- **Storage:** none (R-WEB). No IndexedDB, OPFS, Cache Storage, service worker or stored audio. The player state is not restored after a reload.
+- **Codecs:** MP3 is the baseline. AAC/M4A, WAV and FLAC need runtime checks and decode-error handling (D-8).
+- **Session:** a cookie (R-AUTH-3), with credentialed CORS for exact origins.
+- **Memory:** a whole song held as a Blob can still pressure memory on low-end phones, so S4 measures it. Full decoding is banned because a decoded 30-minute stereo float32 buffer alone takes 635 MB.
 
-| Phase | Deliverable | Completion condition |
+**Size reference** (audio payload only):
+
+| Audio | Size | Within limits? |
 | --- | --- | --- |
-| 0. Architecture spike | Copy-or-link import choice, device-local index, native local playback, shared playback-controller/adapter contract, web Media Session where supported, and web one-track-at-a-time full fetch/release | Local files play offline; browser controls map to the shared controller where supported; web fetches no cloud audio before selection and releases it on track change |
-| 1. Accounts and catalog | Start/login/register/recovery screens, email delivery/retry, 30-day server-revocable sessions, profile/session controls, reauthenticated irreversible deletion and device-cleanup receipts, catalog API | Verified users remain signed in for 30 days; reset logs out all devices; deletion retries to hard removal/user-last and returning devices purge local data |
-| 2. Local import | File/folder selection, copy-or-link choice, warning and relink flow, metadata extraction, Drive download into shared `Songs` | Both modes work after restart; moving a linked file is detected and can be relinked |
-| 3. Organization and screens | Home previews, Library type visibility, Songs/Add songs, explicit artist assignment, manual playlist/group creation and membership/order, profile | Artists reflect explicit assignments; playlists contain songs and groups contain playlists only; unsupported hierarchy/rule payloads are rejected and accepted changes converge across devices |
-| 4. Optional cloud sync | Confirmed Songs/group/playlist scopes, one cloud object per current content version, automatic upload of future scope members, startup reconciliation into each installed client’s `Songs` directory, progress/retry/space handling | Overlapping scopes deduplicate uploads; future members sync; local-only songs stay off the bucket; desktop/native clients download and play verified local `Songs` files on another device; web fetches only the selected cloud song |
-| 5. Google Drive import | OAuth, picker, metadata, Drive-to-device import, optional cloud upload | Selected Drive files play locally after Drive is disconnected; cloud access is only present when opted in |
-| 6. Capacitor mobile | Native file selection, device-local SQLite/path adapter, persistent app-private song directories, route-independent React player UI, and a native player/media-session adapter (Android Media3; iOS background audio and Now Playing/remote commands) | Local paths survive relaunch; route changes do not interrupt playback; React and lock-screen/headset commands control the same engine and stay in sync; metadata/position update correctly; repeat resets after an externally-triggered track change; playback continues across app backgrounding/device lock; replacements wait until playback ends and deletion stops immediately |
-| 7. Multi-device changes | Online-only mutations, revision checks/receipts, Device Sync Service, durable events/push wake-ups, and native background reconciliation | Disconnected edits fail without replay; running/minimized devices reconcile accepted changes when execution is permitted, missed updates catch up, and playback stays uninterrupted |
+| 5 min at 320 kbps | 12.00 MB | Yes |
+| 30 min at 320 kbps | 72.00 MB | Yes |
+| 10 min CD WAV | 105.84 MB | Yes |
+| 30 min CD WAV | 317.52 MB | No (too large) |
+| 5 min 24/96 WAV | 172.80 MB | No (too large) |
+| 60 min at 320 kbps | 144 MB | No (too long and too large) |
 
-## Key decisions and risks
+**Test fixtures:** ordinary songs of 3–5 min, long songs of 10–30 min, and stress or rejection cases of 60 min and 256 or 500 MiB.
 
-- **Organization is manual and fixed.** Artists are explicitly assigned; playlists contain songs; groups contain playlists. Collection creation, memberships and order are user actions. Library type visibility is a display preference.
-- **Song limits apply everywhere.** Each imported/replacement song must be at most 30 minutes AND 128 MiB, including local-only sources. Validate client/server metadata and verified cloud bytes; reject invalid replacements without changing accepted content.
-- **Account removal is irreversible and survives logout.** Reauthenticate, confirm, persist deletion, revoke sessions, wipe owned server data and delete the user last; restricted receipts later drive account-scoped local cleanup. Unreachable devices clean on later execution, not instantly.
-- **Editing requires the server.** Imports, source changes, metadata, organization, ordering, and saved preferences fail while disconnected; cached browsing and local playback remain available. No offline mutation queue is maintained.
+Sources: [browser limits report](research/reports/Song%20sizes%20and%20browser%20limits.html), [storage notes](research/research_notes/Song%20sizes%20and%20browser%20limits/browser_storage.html).
 
-- **Local device storage is the default; cloud object storage is opt-in.** PostgreSQL stores catalog and organization metadata, never audio bytes. A cloud synchronization object is optional; local-only songs have no bucket object.
-- **Local import mode is user-selected.** Copy mode duplicates a selected song into the app-managed `Songs` directory; link mode plays from its original location and requires relinking/resyncing if that location changes. Drive imports and synced desktop/native songs use `Songs` for playback; the web has per-track cloud fetch and optional OPFS offline storage.
-- **Every track has provenance and a device-local location map.** PostgreSQL stores portable origin information; the device's SQLite index stores its actual local relative path or platform URI/access grant. Never sync absolute OS paths to another device.
-- **Cloud sync is explicit and playback differs by platform.** Desktop/native clients reconcile synced songs into `Songs` at every app open and always play local files; web syncs metadata and fetches a complete cloud song only when selected, keeps one active buffer, and discards it on the next selection. Web offline playback requires an explicit persistent download.
-- **Reconcile at startup, verify deeply off the critical path.** Installed desktop/native clients compare the local `Songs` directory to the cloud manifest on every open and download deltas; web does not download the library. Check lightweight metadata each open and full hashes on import/download or periodic background checks.
-- **Device updates run independently of screens.** A Device Sync Service reacts to accepted events while running; native push/background transfers update minimized clients when the OS permits execution. Resume/startup reconciliation repairs delayed or missed updates. Background application respects playback pins and does not authorize offline edits.
-- **Mobile playback needs native work.** Capacitor shares much of the UI, while background playback and device media controls need platform integrations.
-- **Railway Buckets avoid per-request and bucket-egress charges, but do not eliminate all transfer cost.** A worker that imports Google Drive files incurs Railway service egress; device downloads from the bucket do not count as Railway service egress, though they use the user's network and device storage. Region choice, backup strategy, and object versioning limitations need an explicit decision before importing a large library.
+### 9.3 Installed apps (shared desktop and mobile core)
 
-## Initial scope recommendation
+- **Shared core:**
+  - SQLite per account and the local-song service
+  - the overlay merge
+  - the `Songs` directory manager: temp file, verify, atomic install, and an index of owned files
+  - the reconciliation coordinator, with file locking
+  - the sync uploader
+- **Source files:** access is revalidated at every launch, using Android SAF persisted URIs and desktop paths.
+- **`Song Sleeve` folder:** created on first sign-in, in the home folder on desktop and in the folder the user grants on Android (§9.4, §9.5). Mirror files are named by their content ID only: `{contentId}.{ext}` (D-20). A name never changes: editing the name or artist doesn't touch the file, and a replacement arrives as a new content ID with a new file, while the old one is deleted after the switch.
+- **Credentials:** kept in OS secure storage (Android Keystore, Windows Credential Manager, libsecret).
 
-Start with Start and verified-email Login/Register, then Home, Library, Songs with the shared Add songs modal, Artists, Group/Playlist detail, and Profile with device-session controls. Build the local file/folder import flow, optional artist catalog and assignment, per-device song-location index, PostgreSQL catalog and organization records, and reliable local playback without cloud access. Persist Library filters, artist assignments, and ordering by account so they converge across devices. Then add explicit cloud opt-in and second-device downloads, followed by Google Drive import into the app-managed `Songs` directory.
+### 9.4 Desktop
+
+- **Target systems (v1 release):** Windows and Linux. macOS is out of scope until there's a Mac to test on; nothing in the design blocks adding it later.
+- **Shell (D-1):** **Wails** is the choice. Its Go local services (file access, hashing, the folder check, SQLite, transfers and the listener) use the same language as the backend. **Electron** is the fallback if Wails fails any S5 check; the React UI and `packages/core` move over unchanged, and only the native side is rewritten in Node.
+- **Engines Wails runs on:** WebView2 (Chromium) on Windows and WebKitGTK on Linux. Their audio support differs, so S5 tests each format per OS.
+- **Spike S5 must prove, on Windows and Linux:**
+  - local file access and paths that survive a restart
+  - a user-visible `Song Sleeve` folder in the home directory, and fast listing and hashing of it
+  - playing local files from the webview, through a custom protocol or asset server
+  - every D-8 format playing. On Linux this depends on the GStreamer plugins installed, so the app checks at startup and explains what's missing
+  - system media controls: Windows SMTC through MediaSession; Linux MPRIS, through native Go code if WebKitGTK doesn't provide it
+  - a listener that keeps running while the app is minimized or in the tray
+  - secure credential storage (Windows Credential Manager; libsecret on Linux)
+  - a Windows installer with auto-update (unsigned for now, D-34)
+  - both Linux packages, built from the same binary:
+    - **AppImage:** runs on most distributions without installing; updates itself in the app (download, verify the signature, swap the file, restart)
+    - **`.deb`** (Debian, Ubuntu and derivatives): installed through the system package manager, which owns its updates. The app only shows "A new version is available" with a download link; a signed APT repository can come later
+  - the app finds the `Song Sleeve` folder, the credential store and the GStreamer codecs the same way from both packages
+- **Fallback rule:** if Wails fails any item above and the failure can't be fixed within the spike's time box, switch to Electron and run the same list again.
+- **Behavior:** as in the "Desktop minimized" row of §7.10. No push service is needed, because the process keeps its SSE stream open and catches up after sleep.
+
+### 9.5 Mobile (Android, Capacitor)
+
+- **Files:** the `Song Sleeve` folder at the top of user storage, through a SAF tree grant the user approves once (no all-files permission). Never under `Cache`. Staging and temp files stay in app-private storage.
+  - **Android 11+ can't grant the storage root itself** (nor `Download`) as a SAF tree. On first sign-in the app opens the folder picker at the storage root with a prompt to **create or select a folder named `Song Sleeve`**, and grants that folder. If the user picks another folder, the app accepts it and shows its path in Settings. The fallback is `Music/Song Sleeve`. Spike S1 proves this.
+- **Playback:** a native engine owns playback while the WebView is suspended. One engine must own both playback and the system commands.
+  - Android: a Media3 `MediaSessionService`.
+  - Implementation: evaluate Capawesome Audio Player (paid) against building a focused plugin.
+- **Background work:**
+  - Android: normal-priority FCM data messages schedule unique WorkManager work with network constraints. There's no fixed deadline under Doze.
+  - **Long uploads and downloads** run as user-initiated data transfer jobs on Android 14+ (`RUN_USER_INITIATED_JOBS`) and as a `dataSync` foreground service with a notification on older versions. Android 15 limits `dataSync` services to about 6 hours a day, so long batches fall back to the job API. Spike S2 proves parts keep flowing within the stall timeout.
+  - **Mirror downloads (D-30):** Android downloads synced songs on **Wi-Fi only** by default (an unmetered network); **Download synced songs over mobile data** in Settings allows metered networks. Uploads the user started aren't restricted. Downloads also pause while free storage is under **1 GB**; the affected songs show **Needs download** with "Not enough storage on this phone", and resume on their own when space returns. Synced songs are still fully mirrored; there's no partial-mirror mode.
+  - **Without Google Play services** there is no FCM: the app catches up on open, resume and while it runs, and no background update is promised (§7.10).
+  - Coalesce wake-ups and never poll.
+
+---
+
+## 10. Infrastructure and operations
+
+<a id="use-the-bucket-for-optional-cloud-upload-download-and-cleanup"></a><a id="railway-storage-options-for-song-files"></a>
+
+### 10.1 Railway Storage Bucket
+
+- **Why a bucket:**
+  - It's private and S3-compatible, with presigned URLs and multipart upload.
+  - Storage costs $0.015/GB-month, with no operation or bucket-egress charges (40 TB ≈ $600/month).
+  - The Hobby plan caps buckets at 1 TB.
+  - Volumes don't fit, because they can't attach to replicated services. Never use the ephemeral filesystem.
+- **Limits to plan around:**
+  - Data is encrypted at rest, but there are no app-owned keys and no per-account cryptographic erasure.
+  - There is no configurable SSE, versioning, object lock, lifecycle rule or automatic backup.
+  - Access goes over the public network only.
+  - Regions are `sjc`, `iad`, `ams` and `sin`; none is in Brazil, and a bucket's region is fixed when it is created.
+  - There is no second copy of the audio in this stage (D-3). The bucket can be the only copy of a song (for example, web-only users), so a bucket loss or a cleanup bug can lose songs permanently. This risk is accepted for now. There are no database backups in this release either (D-16).
+  - Benchmark transfer speeds from the target networks.
+- **Egress:** transfers between devices and the bucket are free of service egress. Worker publication (service → bucket) counts as egress.
+- **Configuration:**
+  - One bucket per environment; capacity is billed across the workspace.
+  - Credentials reach only the API and workers, through variable references: `S3_ENDPOINT`, `S3_BUCKET` (from `BUCKET`), `S3_REGION` (`auto`), `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
+  - Use AWS SDK for Go v2 behind an `ObjectStore` interface, with a custom `BaseEndpoint`, virtual-hosted addressing and the default resolver. Use MinIO locally.
+- **CORS:**
+  - Allow only exact web origins: production and staging, plus the desktop or Capacitor webview origins if they make direct requests.
+  - Allow only `PUT`, `GET` and `HEAD` and the headers actually needed, and expose `ETag`.
+  - CORS is not authorization.
+- **Keys:** staging uses `users/{userID}/staging/{operationID}/{attemptID}`; final uses `users/{userID}/songs/{contentID}`.
+- **Cleanup:** resumable inventories cover failed staging, incomplete multipart uploads, retired content, deleted tracks, failed or stalled syncs and orphans. Re-scan for late writes before declaring cleanup done.
+
+<a id="deployment-instructions"></a>
+
+### 10.2 Vercel and Railway deployment
+
+1. **Environments:** separate Railway **staging** and **production** environments, each with PostgreSQL and a bucket in the API's region.
+2. **API service:** binds `0.0.0.0:$PORT`, has a `/health` healthcheck and a domain, and uses the private `DATABASE_URL`.
+3. **Worker service:** the same image, with no public domain and its own concurrency. **Migrations** run once, as a controlled pre-deploy step.
+4. **Variables live in Railway only:** database, bucket, allowed origins, email provider, FCM credentials and signing keys. Vercel gets only the public `VITE_API_BASE_URL` and feature flags; every `VITE_*` value is public.
+5. **Vercel:** two projects.
+   - **Web app:** root `apps/web`, the Vite preset, `npm run build` → `dist`, an SPA fallback, `X-Robots-Tag: noindex`, and a preview deployment per branch (R-WEB-ACCESS).
+   - **Landing page:** root `apps/site`, static output, no rewrites to the API (R-SITE).
+6. **Domains:**
+   - **Target:** same-site HTTPS domains, for example `app.example.com` on Vercel and `api.example.com` on Railway, with credentialed CORS for exact origins and CSRF protection on cookie writes.
+   - **For now (pending custom domain, §10.3):** the web runs on its Vercel domain (`*.vercel.app`). A `vercel.app` page calling a `railway.app` API would need third-party cookies, which browsers block, so the web calls the API through a Vercel rewrite at `/api/*` on its own domain. The session cookie is then first-party. Audio still goes directly between the browser and the bucket, never through Vercel. Spike S6 checks that SSE works through the rewrite.
+7. **Desktop builds:** a Windows installer, a Linux AppImage and a Linux `.deb`, all built in CI, with an auto-update channel and the production API URL.
+   - **Signing (D-34):** the Windows installer ships **unsigned** for now, so Windows SmartScreen shows "Windows protected your PC" and the user must choose **More info → Run anyway**; the landing page explains this next to the Windows button. Before the public launch (M6 release checklist), choose between the Microsoft Store (Microsoft signs it; needs MSIX packaging tested in S5) and a paid code-signing certificate. Auto-update verifies its own update signature either way.
+   - **Keys:** the AppImage update key, the `.deb` package key and the Android upload key live in GitHub Actions secrets, with an offline backup kept by the owner. Android uses Google Play App Signing if Play is the channel.
+   - **Release hosting (D-28):** every installer (and the Android APK, if that channel is chosen) is attached to a GitHub Release, with stable asset names and checksums. The auto-update channel and the `.deb` update notice read the latest release; the landing page links to it (§8.5).
+   - GitHub Releases are only downloadable by the public when the repository is public. If this repository stays private, releases are published to a separate public repository that holds only release assets; CI needs a token scoped to that repository.
+8. **Mobile builds:** an Android build (Capacitor) with the production API URL, FCM and WorkManager, signed in CI; the distribution channel (Google Play or a direct APK) is chosen at release. No iOS build (D-22).
+9. **Hosting boundaries:**
+   - Never proxy audio through Vercel Functions, which have a 4.5 MB limit.
+   - Railway's public HTTP/SSE connections close after 15 minutes, or after 5 idle minutes. Send heartbeats, reconnect with jitter and replay from the cursor, and recheck the session on every reconnect.
+   - Each replica fans out from one database listener, not one connection per device.
+
+### 10.3 Pending setup: custom domain
+
+The app starts on its Vercel domain (D-13). These steps wait until a custom domain is bought, and must be done **before anyone other than the owner uses the app** (at the latest in the M6 release checklist):
+
+1. Buy the domain and point `<domain>` (and `www`) to the landing page, `app.<domain>` to the web app and `api.<domain>` to the Railway API.
+2. **Email:** add the domain in Resend, publish its SPF, DKIM and DMARC records, and send from `no-reply@<domain>`.
+3. Switch the web from the `/api` rewrite to `api.<domain>` (or keep the rewrite), and set the cookie, CORS origins, bucket CORS and the links in emails (reset) to the new domain.
+4. Update the production API URL in the desktop and mobile builds.
+5. Optionally bring back email verification (R-AUTH-1).
+6. Publish the Terms of Use and Privacy Policy (§8.5, D-32).
+
+**Until then:** Resend can't verify a `vercel.app` domain, so email is sent with Resend's test sender. It only delivers to the address of the Resend account owner. Password reset and the other emails can therefore be tested end to end by the owner only. Other people can register (R-AUTH-1), but they can't receive a password-reset email until the domain is set up.
+
+### 10.4 Database operations
+
+Railway PostgreSQL is unmanaged: backups, restores, tuning and monitoring are our responsibility.
+
+- **Connections:** use bounded pgx pools. If PgBouncer is added, keep LISTEN and migrations on dedicated connections.
+- **Backups (deferred to a later version, D-16):** this release defines no backup policy, RPO/RTO, PITR or restore drills. Accepted risk: losing the database loses accounts, sessions, track documents and organization. When it's picked up later, it should cover:
+  - RPO and RTO, Railway's scheduled backups (about 6, 27 or 89 days) and optional PITR (about 4 weeks)
+  - a written restore procedure, rehearsed in drills
+  - after a restore and before serving traffic: replay the deletion ledger, then remove track documents whose audio is missing from the bucket (there is no audio backup, D-3)
+- **Deletion ledger:** kept in this release, because account deletion needs it anyway. It stays recoverable on its own so a future restore can replay it.
+
+### 10.5 Operator tools
+
+A small admin CLI (`server/cmd/admin`, run through the Railway shell against one environment; F-18). No admin web UI.
+
+- **Commands:** show an account's usage and quota; set its quota; turn its cloud sync on or off (`cloud_sync_enabled`, for example to let a tester in); suspend or unsuspend it; start account deletion (the same flow as §7.11, without reauthentication); list stalled operations and failed cleanup jobs.
+- **Suspension** sets `users.suspended_at`: every session is revoked and login, writes and grants are refused with `account_suspended`. Nothing is deleted.
+- Every command writes an `admin_actions` row (who, what, when, account, arguments); the CLI never prints tokens or song content.
+
+---
+
+<a id="architecture-review-checklist"></a>
+
+## 11. Open decisions and spikes
+
+### 11.1 Decisions
+
+| ID | Decision | Needed by |
+| --- | --- | --- |
+| D-1 | **Decided:** Wails, with Electron as the fallback if S5 fails. The v1 release targets Windows and Linux only; macOS later. Linux ships as both AppImage and `.deb` | M4 |
+| D-2 | **Decided:** River on PostgreSQL. A separate account-deletion sweep backs it up, and the per-track operation slot stays in its own table | — |
+| D-3 | **Decided:** no backup copy of song audio at this early stage; the risk of losing bucket objects is accepted. Revisit before a wider release | — |
+| D-4 | **Decided:** there is no unsync. A synced song can only be deleted, everywhere (R-LOCAL-5, §7.8) | — |
+| D-5 | **Decided:** the web is online-only and stores nothing on the device (R-WEB). It reads device files only to add a song (synced at once) or replace a synced song's audio | — |
+| D-6 | **Decided:** a 25 GB cloud storage quota per account, by usage, adjustable per account (R-LIM-5) | — |
+| D-7 | **Decided:** sync progress shows on every device; a sync is all-or-nothing, and a failed sync deletes its track document (R-ID-4). Google Drive import is removed; songs come only from local files. The stall timeout is 5 minutes, and a failed replacement keeps the old content | — |
+| D-8 | **Decided:** only MP3, AAC (`.m4a`/`.aac`), FLAC and WAV (PCM), for local and synced songs on every platform. The real codec is checked, not the extension (ALAC in `.m4a` is rejected). OGG/Opus, ALAC, WMA and AIFF are unsupported | — |
+| D-9 | **Decided:** **Log out** keeps the account's data on the device; a separate **Log out and remove from this device** erases it after a warning. The web has nothing stored (R-WEB) | — |
+| D-10 | **Decided:** no artist merge page. Duplicates are prevented by the smart artist search with **Did you mean…?** (R-ORG-2); the user can still create similar names, and fix them with rename or per-song edits | — |
+| D-11 | **Decided:** player defaults R-PLAY-5…8 (3-second Previous rule, shuffle-off restores order, queue snapshot, restore paused on installed apps) | — |
+| D-12 | **Decided:** password change in the v1 release (current password required, other sessions revoked, notice email; R-AUTH-8). Email change is not a feature; the email stays unique and permanent (R-AUTH-7) | — |
+| D-13 | **Decided:** Resend for transactional email. Email verification is removed for now (R-AUTH-1). The app uses its Vercel domain for now; the custom domain and the email DNS records are pending setup (§10.3) | Before any external user |
+| D-14 | **Decided:** English is the default; Brazilian Portuguese is an option, chosen on Start/Login and on Profile, saved per account (`users.locale`) and used for emails | — |
+| D-15 | **Decided:** `account_events` are kept for 90 days, matching the session length; older cursors get `cursor_expired` and a full snapshot resync (R-EVT-4) | — |
+| D-16 | **Deferred to a later version:** database backup policy (RPO, RTO, retention, PITR) and restore drills. The deletion ledger stays in this release | — |
+| D-17 | **Decided:** heartbeat 30 s, stall 5 min, upload grant 5 min, download grant 15 min, receipts kept 90 days, no separate lease (R-SYNC-5) | — |
+| D-18 | **Decided:** local-song changes stay on the device, work offline, and are lost on reinstall (R-LOCAL-2) | — |
+| D-19 | **Decided:** downloads of immutable content don't take the per-track slot (R-SYNC-1) | — |
+| D-20 | **Decided:** files in the `Song Sleeve` folder are named by ID only: `{contentId}.{ext}`, never renamed | — |
+| D-21 | **Decided:** the folder check deletes extra files permanently, with no trash | — |
+| D-22 | **Decided:** mobile covers Android only in this release. iOS is deferred until a Mac and an iPhone are available; the code stays Capacitor-ready for it | — |
+| D-23 | **Decided:** cloud sync is an upcoming feature. Only accounts whose email is in `CLOUD_SYNC_ALLOWLIST` (the owner) get it at registration; everyone else uses local songs only, until sync is opened to all (R-CLOUD-8) | M1 |
+| D-24 | **Decided:** syncs run through a per-device queue with 3 parallel workers; a track document is created only when a worker starts the song (R-CLOUD-9) | M3 |
+| D-25 | **Decided:** a failed sync is never retried automatically; it's marked failed, and the user retries one song or all failed songs of a list. Songs in a batch are independent (R-ID-4, R-CLOUD-9) | M3 |
+| D-26 | **Decided:** the web app is a full milestone (M3) but owner-only in this release: only allowlisted accounts can register or sign in on the web (R-WEB-ACCESS). The public web presence is a landing page that presents the app and links to the downloads (R-SITE, §8.5) | M3 |
+| D-27 | **Decided:** password reset uses a public reset page in the web app, open to every account; it sets the password only and creates no web session (§7.12) | M1 |
+| D-28 | **Decided:** installers are hosted on GitHub Releases, which also serves the auto-update channel and the landing page's download links (a separate public releases repository if this one stays private; §10.2) | M4 |
+| D-29 | **Decided:** a manifest file in each account folder records the mirrored files; the folder check compares it with the server's catalog, rebuilds it from the files if it's lost (no wipe), runs quick on open/resume/folder change and full on demand, deletes extras only after catching up with the server, and asks before deleting more than 20 files (§7.13) | M4 |
+| D-30 | **Decided:** Android downloads synced songs on Wi-Fi only by default, with a setting for mobile data; downloads pause under 1 GB free storage; full mirroring stays (§9.5) | M5 |
+| D-31 | **Decided:** passwords of 10 to 128 characters with no composition rules, the 10,000 most common refused, hashed with argon2id (R-AUTH-9) | M1 |
+| D-32 | **Decided:** Terms of Use and Privacy Policy (rights to the music, takedown contact, LGPD, data stored outside Brazil) on the landing page, accepted at registration; the Play data-safety form follows the Privacy Policy (R-AUTH-10, §8.5) | Before external users |
+| D-33 | **Decided:** 10,000 synced songs, 500 playlists, 100 groups and 5,000 songs per playlist per account, enforced as caps and tested at full size (§4.4) | M2 |
+| D-34 | **Decided:** the Windows installer ships unsigned for now; Microsoft Store or a paid certificate is chosen before the public launch. Keys in GitHub Actions secrets with an offline backup (§10.2) | M4 |
+| D-35 | **Decided:** Sentry free tier for the server, web and apps, with personal and song data scrubbed and an opt-out in Settings (§4.4) | M4 |
+| D-36 | **Decided:** no sorting, album/track number or in-app volume in the v1 release; songs, playlists and groups keep a creation time for Home's "newest first" | M3 |
+
+### 11.2 Spikes (time-boxed; start in M0 and run in parallel)
+
+Each spike ends at its time box with a written result. If it fails, its fallback is adopted without a new design round (F-15).
+
+| ID | Prove | Time box | Fallback if it fails | Blocks |
+| --- | --- | --- | --- | --- |
+| S1 | Capacitor: the user-visible `Song Sleeve` folder through a SAF tree grant (the user creates or selects it, §9.5), listed and hashed quickly; grants that survive a relaunch; a Media3 engine driven from React; lock-screen and headset commands; background playback; interruptions | 5 days | `Music/Song Sleeve`; a focused own plugin if Capawesome falls short; React Native with Expo only if Capacitor itself fails (§4.1) | M5 |
+| S2 | FCM push → WorkManager reconciliation with no UI open, through Doze, low-power mode, force-stop and missed pushes; long transfers as user-initiated data transfer jobs (Android 14+) or a `dataSync` foreground service, keeping parts within the 5-minute stall timeout | 5 days | No background promise: catch up on open and resume only; uploads run only while the app is visible or its foreground notification is shown | M5 |
+| S3 | Railway bucket: presigned PUT and multipart uploads from the browser and from native apps; checksum headers; CORS; immutable final publication; whether conditional copy works; measured egress | 3 days | Multipart fails from the browser: one presigned PUT per song (128 MiB is far below the single-PUT limit), with progress from the client's heartbeat. The bucket fails broadly: another S3-compatible provider behind the same `ObjectStore` interface | M3 |
+| S4 | Browser: fetching and playing a 128 MiB Blob, and its memory use on low-end Android phones (iPhone Safari can't be tested without an iPhone); the codec matrix; client-side duration and SHA-256 extraction and its speed in the browser and in installed apps | 3 days | A lower cap for **web playback only** (songs above it show "Play this song in the app"); the R-LIM-1 song limit itself doesn't change | M3 |
+| S5 | Wails on Windows and Linux, tested against the list in §9.4 | 5 days | Electron, run against the same list (D-1) | M4 |
+| S6 | SSE through the Railway edge: the 15-minute cap, reconnect and replay, fan-out across replicas; SSE and the session cookie through the Vercel `/api` rewrite (§10.2) | 2 days | Polling `GET /me/catalog/changes` every 30 s while a client is visible (installed apps also on resume); the event model is unchanged | M2 |
+
+---
+
+## 12. Delivery plan
+
+Every milestone depends only on earlier ones.
+
+1. **The web app comes first because it's cloud-only.** It exercises every server contract (accounts, catalog, events, operations, upload and publication, playback) with no local-file risk. It stays owner-only in this release (D-26), so it serves as the owner's test client for the server.
+2. **Desktop comes next.** It introduces the shared installed-app core (local songs, overlay, `Songs`, reconciliation) on the platform with the fewest background limits.
+3. **Android comes last.** It reuses that core and adds the native player and background work. Spikes S1 and S2 run from M0, so mobile isn't delayed by them.
+
+| Milestone | Builds | Depends on |
+| --- | --- | --- |
+| **M0 Foundations** | Repository layout and CI; the OpenAPI skeleton; Gin, pgx, sqlc and Goose; the error envelope; local Postgres and MinIO; a React shell with routing; design tokens and i18n scaffolding with `en` (default) and `pt-BR`; the test harness and audio fixtures. The spikes start | — |
+| **M1 Accounts and devices** | Register (no verification), login and logout; the account language; 90-day sessions; device registration; Profile sessions; password reset and change; email jobs through Resend (test sender until the custom domain, §10.3); the Vercel `/api` rewrite; the web access gate (`web_app_unavailable`, `noindex`; R-WEB-ACCESS); cookie and bearer session transports; the client version check (`client_update_required`); web device records; reauthentication. **Server-side** account deletion: ledger, wipe, user row last, receipts, restricted status and ack. Web clearing on logout or deletion | M0 |
+| **M2 Mutation and event backbone** | Receipts and revision checks; `account_events`; the change feed and snapshot; SSE with replay; the web in-memory catalog store and Device Sync Service (R-WEB); the `connection_required` UX; status recovery for outstanding requests | M1, S6 |
+| **M3 Web app (cloud-only, owner-only)** | The upload pipeline: operation slot, heartbeats and grants (R-SYNC-5); all-or-nothing syncs with failure rollback, stall detection and progress hints; staging upload; worker verification and publication; content switch. Web **Add songs** with auto-sync and the install-app alert. Artists, playlists, groups, ordering keys, the Library preference and search across every screen. **Replace audio file** with the suggestion step. **Delete song**. The web player (whole-song Blob, Media Session) with pins. Cloud cleanup jobs. The storage quota with reservations and the Profile usage display. The queue-IDs endpoint. Sandboxed ffprobe. The admin CLI (§10.5) | M2, S3, S4 |
+| **M4 Desktop app and installed core** | The Wails shell (D-1) for Windows and Linux, and per-account SQLite. Local import (link to the source file), local songs and overlay with merged lists, local edits and local health. The `Song Sleeve` folder and the folder check (§7.13), with the Settings trigger. The `Songs` folder and downloads, and reconciliation. **Sync** for a song or a scope, with auto-sync. Local delete. The local-file player with system controls. A listener while minimized. The desktop purge. A Windows installer (unsigned for now, D-34) with auto-update; Linux AppImage (self-updating) and `.deb` (update notice) | M3, S5 |
+| **M5 Android app** | Capacitor packaging of the shared core for Android (no iOS, D-22); native file grants; the native engine and system controls; push registration; background reconciliation and transfers; the mobile purge | M4, S1, S2 |
+| **M6 Hardening, landing page and release** | The public landing page (`apps/site`, §8.5) with the download links, Terms and Privacy Policy (D-32); the Windows signing choice for launch (D-34); observability and alerts; rate-limit tuning; a security review; a load test; a cost dashboard; the custom domain setup (§10.3) if not done earlier; the release checklist | All |
+
+### 12.1 Exit tests by milestone
+
+Every item must pass in staging before its milestone closes.
+
+**M1**
+
+- Sessions: the 90-day boundary, explicit revocation, and persistence across restarts.
+- Registration signs in at once, sends no verification email, and rejects a taken email with `email_unavailable`; registration is rate-limited; reset responses stay generic.
+- Language: a new account starts in English; switching to Português (Brasil) on Profile changes the UI on every device and the language of later emails; dates and sizes follow the locale.
+- Reset tokens: expiry, reuse and concurrent submits; logout of every device.
+- **Web access (R-WEB-ACCESS):** the allowlisted owner registers and signs in on the web; any other email is refused at web registration and any account without cloud sync is refused at web sign-in with `web_app_unavailable`, with no session created; the reset page still works for every account and creates no web session; the same account still signs in from an installed app; every web-app response carries `noindex`.
+- Transports: a bearer token is refused as a cookie and the reverse; cookie writes without a CSRF token fail; a client below the minimum version gets `client_update_required`.
+- Field limits: empty, too-long and control-character names are rejected with `invalid_field`.
+- Cloud sync availability: registering with an allowlisted email enables sync; any other account gets `cloud_sync_unavailable` from every sync request and sees **Coming soon**.
+- Password policy: 9 characters, 129 characters and a common password are refused; a 10-character passphrase with spaces is accepted; hashes are argon2id and an outdated parameter set is rehashed at login.
+- Terms: registration without the checkbox fails; a new terms version is asked at the next login.
+- Password change: a wrong current password changes nothing; success keeps this session, revokes the others and sends the notice email. No API or screen can change the email.
+- Email retry and idempotency; reauthentication-proof expiry and reuse.
+- Deletion can be cancelled before confirmation but not after it's accepted.
+- Deletion: worker interruptions, the user row deleted last, status and ack after the user row is gone, and re-registration with the same email.
+
+**M2**
+
+- A disconnected attempt shows `connection_required`, changes nothing and is never replayed.
+- Stale revisions are rejected.
+- A lost response is recovered without creating a duplicate.
+- An SSE drop, including the forced 15-minute close, replays from the cursor.
+- `cursor_expired` triggers a snapshot.
+- Fan-out works across multiple API replicas.
+- Scale (D-33): a full snapshot and the change feed for an account at the scale target stay fast enough to show the library without blocking the UI; caps return `limit_reached`.
+
+**M3**
+
+- **Admin CLI:** setting a quota, toggling cloud sync and suspending an account take effect at once and write `admin_actions`; a suspended account can't log in or write.
+- **Untrusted media:** a malformed or hostile file times out or fails in ffprobe and is rejected without affecting the worker.
+- **Web queue:** starting playback in a 1,000-song list snapshots all of it through `queue-ids`.
+- **Limits:**
+  - Exactly 1,800 s and exactly 134,217,728 bytes pass.
+  - These fail: one byte over; a fraction of a second over; both limits exceeded; artwork pushing the file over; an unknown duration; wrong declared facts.
+  - Over-limit cloud objects are rejected and cleaned up.
+- **Upload pipeline:**
+  - The order holds: document → upload → verify → content switch.
+  - Every device shows a syncing song with its progress.
+  - A rejected file, a cancel from another device and a stall past the timeout each delete the track document, its memberships and its staging; every device removes the song; the originating device gets it back as local with **Try again**.
+  - A transient network error is retried without failing the sync.
+  - A failed replacement keeps the old content and never deletes the song; the old file stays in the bucket until the switch commits.
+  - An upload with no progress for 5 minutes fails; one that keeps sending parts never does, however slow.
+  - Overwriting staging after verification can't reach the final key.
+  - Expired grants and abandoned transfers are handled; multipart uploads resume.
+  - After a failed replacement, a new one can start once the last 5-minute upload grant expires, never earlier.
+  - Only one operation per track is active at a time; distinct submissions queue and retries attach.
+  - Sync queue: adding 20 songs runs 3 at a time; only the 3 in progress have track documents and show **Syncing…** elsewhere; queued songs never stall.
+  - In a batch, one rejected song is marked failed and the others finish; nothing is retried automatically; **Try again** and **Retry failed syncs** re-queue only failed songs.
+- **Replace audio file:**
+  - The suggestion step offers keep, use new and edit for each field.
+  - Nothing applies before confirmation, and cancel changes nothing.
+  - The same file creates fresh content.
+  - A `PATCH` from another device during the upload is shown again as a suggestion.
+  - A failed replacement keeps the old content.
+- **Delete and organize:**
+  - Deleting a synced song removes it from the cloud, its playlists and every device.
+  - Remove from playlist or group is not a delete.
+  - Child types are enforced; payloads with rules or parents are rejected.
+  - The three orders are independent; move to top or bottom works; drag works with keyboard and touch.
+  - The Library filter requires at least one type.
+  - Smart artist search: `Beatles` offers **The Beatles**, `ACDC` offers `AC/DC`, `Beyonce` offers `Beyoncé`, `Metalica` offers `Metallica`; **Did you mean…?** appears before a new artist is created, and creating the new one anyway still works.
+- **Web player:**
+  - One Blob at a time, no prefetch, release on switch, cancellation of in-flight loads, and a visible delay before the next song.
+  - Network failure and memory pressure are handled.
+  - Pinned replacements and deletes apply after playback; repeat stops at the boundary.
+  - A track change from the system controls resets repeat.
+  - Route changes don't interrupt playback; seeking and time display work; queue boundaries, shuffle and the empty state behave correctly.
+- **Online-only web:** after using the app, the browser holds no IndexedDB, OPFS, Cache Storage or service worker for the site; a reload refetches everything; closing the tab mid-upload fails the sync after the stall timeout and the song disappears from every device.
+- **Storage quota:**
+  - A sync that would pass 25 GB is refused before anything is created, and the song stays local.
+  - Concurrent syncs from several devices can't exceed the quota together.
+  - Failed syncs and replacements release their reservation; deletes and replacements free space when they commit.
+  - Profile shows usage, and the 90% warning appears.
+- **Other:** the install-app alert appears, and egress is measured.
+
+**M4**
+
+- **Local songs:**
+  - Imported songs survive a restart, and nothing is copied into `Songs` on import.
+  - Local import, edits, overlay changes and local delete all work offline; deleting a local song leaves its source file in place.
+  - The device-only notice appears.
+- **Mixed playlists:**
+  - A playlist with one synced song and one local song shows both here, and only the synced song on another device.
+  - Syncing the local song makes it appear there in the same position.
+  - Deleting the playlist on another device drops the overlay entries.
+- **Sync:**
+  - The source file is copied into `Songs` before upload and stays untouched; cancel sync removes the `Songs` copy.
+  - A checksum mismatch blocks the upload.
+  - A scope auto-syncs local songs added later, and pausing keeps synced songs.
+  - The sync queue survives a restart; auto-sync and scopes skip songs marked `sync_failed`.
+  - An account without cloud sync can import and play local songs and organize them; every sync action shows **Coming soon**.
+  - Cancel sync returns the song to local.
+  - No screen or API offers unsync; deleting a synced song removes it from the cloud and every device's `Songs`, and leaves the original source file untouched.
+- **Downloads and files:**
+  - A second device downloads synced songs into `Songs`.
+  - A mirror modified unexpectedly is restored.
+  - Moved, deleted or revoked source files are detected, and the relink flow works: the same file relinks silently; a different file goes through the suggestion step; a changed file still plays but can't sync.
+  - Sync pre-check: a source changed since import is caught before any track document exists.
+  - Logout or account switch with syncs running cancels them on the server; they return as `queued` and resume at the next login.
+  - Sync edge cases: a playlist deleted mid-sync is dropped from the memberships without failing the sync; a renamed server artist updates linked local songs.
+- **Folder check:**
+  - On open: a song deleted by hand is downloaded again; a file added by hand is permanently deleted; a song edited by hand is restored; a renamed mirror is renamed back.
+  - Offline, or before catching up with the server: nothing is deleted; missing songs show **Needs download** until a connection returns; extras are removed by the first check after catching up.
+  - Manifest: a reinstall that keeps the folder adopts every matching file with no download; a deleted or corrupted manifest is rebuilt in full mode with no wipe and no re-download of valid files; a crash while writing leaves a valid manifest.
+  - An empty or partial catalog (simulated) deletes nothing.
+  - A check that would delete more than 20 files asks first; **Keep for now** keeps them.
+  - Desktop: deleting a file by hand while the app runs is restored by the watcher-triggered quick check.
+  - **Check Songs folder** in Settings runs the full check and reports the result.
+  - **Replace audio file** waits for the check, and can't pick a file inside the folder.
+  - The playing file and this device's in-progress syncs are never removed.
+  - Running out of disk space during a download is handled.
+- **Background and accounts:**
+  - Updates arrive while the app is minimized, and the app catches up after sleep.
+  - Two accounts on the same device stay isolated, and logout keeps the namespace.
+  - **Log out and remove from this device** shows the warning, deletes only that account's folder and database, leaves source files and other accounts alone, and resumes if interrupted.
+  - An offline purge completes once the device comes online; late callbacks are quarantined.
+  - System media controls stay in sync (Windows SMTC, Linux MPRIS).
+- **Desktop platforms:** every M4 test passes on Windows, on the Linux AppImage and on the Linux `.deb`; updates work for each; each D-8 format plays on both, or the app explains the missing Linux codec.
+
+**M5**
+
+- The M4 list on Android.
+- Updates arrive in the foreground, minimized without playback, and minimized during playback.
+- Push-triggered reconciliation works with no UI open, under Doze, low-power mode, missed and duplicate pushes, force-stop, token rotation and logout.
+- Foreground and background coordinators never run the same work at once.
+- Interrupted downloads resume.
+- Lock-screen and headset controls work, and interruptions are handled.
+- Downloads wait for Wi-Fi by default and run on mobile data only when the setting allows; below 1 GB free they pause with **Needs download** and resume when space returns.
+
+**M6**
+
+- Landing page: every download button serves the current build (Windows unsigned until D-34's launch choice, with the SmartScreen note); OS detection highlights the right one; both languages render; it makes no API calls, sets no cookies and never links to the web app; it is indexed while the web app is not.
+- CORS and CSRF hold, and rate limits work across replicas.
+- Alerts fire on stalled deletion or cleanup, and the cost dashboard is live.
+
+---
 
 ## References
 
-- [Gin documentation](https://gin-gonic.com/docs/)
-- [Capacitor documentation](https://capacitorjs.com/docs)
-- [Google Drive API limits and pricing](https://developers.google.com/workspace/drive/api/guides/limits)
-- [Google Drive API scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)
-- [Google Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
-- [PostgreSQL storage and TOAST](https://www.postgresql.org/docs/current/storage-toast.html)
-- [Vercel Vite deployment](https://vercel.com/docs/frameworks/frontend/vite)
-- [Vercel deployment environments](https://vercel.com/docs/deployments/environments)
-- [Railway Storage Buckets](https://docs.railway.com/storage-buckets)
-- [Railway bucket billing](https://docs.railway.com/storage-buckets/billing)
-- [Railway file upload and serving](https://docs.railway.com/storage-buckets/uploading-serving)
-- [Railway browser uploads and CORS](https://docs.railway.com/guides/storage-buckets-guide)
-- [Railway bucket CLI, credentials, and regions](https://docs.railway.com/cli/bucket)
-- [Railway regions](https://docs.railway.com/deployments/regions)
-- [Railway Volumes](https://docs.railway.com/volumes)
-- [Railway volume limits](https://docs.railway.com/volumes/reference)
-- [Railway PostgreSQL](https://docs.railway.com/databases/postgresql)
-- [Railway healthchecks](https://docs.railway.com/deployments/healthchecks)
-- [AWS SDK for Go v2 custom endpoints](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configure-endpoints.html)
-- [AWS SDK for Go v2 S3 presigned URL examples](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/go_s3_code_examples.html)
-- [Capacitor Filesystem directory behavior](https://github.com/ionic-team/capacitor-filesystem/blob/main/README.md)
-- [Capacitor File Transfer](https://github.com/ionic-team/capacitor-file-transfer)
-- [Android document and file access](https://developer.android.com/training/data-storage/shared/documents-files)
-- [Apple security-scoped file URLs](https://developer.apple.com/documentation/foundation/nsurl)
-- [MDN Origin Private File System](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)
-- [MDN storage quota and eviction](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)
-
-- [Android persistent work](https://developer.android.com/develop/background-work/background-tasks/persistent)
-- [FCM message priority](https://firebase.google.com/docs/cloud-messaging/android-message-priority)
-- [Apple background notifications](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)
-- [Apple background downloads](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background)
-
-- [OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
-- [OWASP password recovery](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)
+- **Research:** [v1 plan](research/implementation-plan-v1.md), [architecture review](research/architecture-review/architecture-review.md), [catalog/API notes](research/architecture-review/notes/catalog_api.md), [storage/sync notes](research/architecture-review/notes/storage_sync.md), [player/deployment notes](research/architecture-review/notes/player_deployment.md), [stack review](research/reports/Music%20app%20stack%20review.html), [song sizes and browser limits](research/reports/Song%20sizes%20and%20browser%20limits.html), [storage/database comparison (historical)](research/storage-and-database-research.html)
+- **Platforms:** [Gin](https://gin-gonic.com/docs/), [Capacitor](https://capacitorjs.com/docs), [Capacitor Filesystem](https://github.com/ionic-team/capacitor-filesystem/blob/main/README.md), [Capacitor File Transfer](https://github.com/ionic-team/capacitor-file-transfer), [Capawesome Audio Player](https://capawesome.io/docs/sdks/capacitor/audio-player/), [Wails](https://wails.io/docs/introduction), [Tauri](https://v2.tauri.app/start/), [Electron](https://www.electronjs.org/docs/latest/)
+- **Mobile OS:** [Android document access](https://developer.android.com/training/data-storage/shared/documents-files), [Android persistent work](https://developer.android.com/develop/background-work/background-tasks/persistent), [FCM priority](https://firebase.google.com/docs/cloud-messaging/android-message-priority), [Media3 background playback](https://developer.android.com/media/media3/session/background-playback), For iOS later: [Apple security-scoped URLs](https://developer.apple.com/documentation/foundation/nsurl), [Apple background notifications](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app), [Apple background downloads](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background), [MPRemoteCommandCenter](https://developer.apple.com/documentation/mediaplayer/mpremotecommandcenter), [Apple background audio](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/MediaPlaybackGuide/Contents/Resources/en.lproj/RefiningTheUserExperience/RefiningTheUserExperience.html)
+- **Web:** [Media Session](https://developer.mozilla.org/en-US/docs/Web/API/MediaSession), [Chromium Blob design](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/storage/browser/blob/README.md), [Blob URL cleanup](https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/blob), [audio codecs](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Audio_codecs), [quota and eviction](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)
+- **Railway:** [Storage Buckets](https://docs.railway.com/storage-buckets), [bucket billing](https://docs.railway.com/storage-buckets/billing), [uploading/serving](https://docs.railway.com/storage-buckets/uploading-serving), [browser uploads and CORS](https://docs.railway.com/guides/storage-buckets-guide), [bucket CLI](https://docs.railway.com/cli/bucket), [Volumes](https://docs.railway.com/volumes), [networking limits](https://docs.railway.com/networking/public-networking/specs-and-limits), [PostgreSQL](https://docs.railway.com/databases/postgresql), [databases](https://docs.railway.com/databases), [PgBouncer](https://docs.railway.com/guides/connection-pooling-pgbouncer), [PITR](https://docs.railway.com/volumes/point-in-time-recovery), [volume backups](https://docs.railway.com/volumes/backups), [healthchecks](https://docs.railway.com/deployments/healthchecks)
+- **AWS SDK:** [custom endpoints](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configure-endpoints.html), [presigned URL examples](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/go_s3_code_examples.html), [presigned URL semantics](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)
+- **Vercel:** [Vite deployment](https://vercel.com/docs/frameworks/frontend/vite), [environments](https://vercel.com/docs/deployments/environments), [function limits](https://vercel.com/docs/functions/limitations)
+- **Security:** [OWASP sessions](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), [OWASP password reset](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html), [OWASP CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html), [River retries](https://riverqueue.com/docs/job-retries)
+- **Data:** [Chartmetric 2024 song lengths](https://reports.chartmetric.com/2024/chartmetric-year-in-music-2024)
