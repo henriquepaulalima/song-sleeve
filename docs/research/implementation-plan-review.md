@@ -1,7 +1,7 @@
 # Implementation plan review
 
 **Reviewed:** `docs/implementation-plan.md` as of commit `81d7c05` (2026-10-07)
-**Result:** the plan was restructured in place, then revised again after the owner's decisions on 2026-10-08 (see [Owner decisions, round 1](#owner-decisions-round-1-2026-10-08)). The original plan is preserved as [research/implementation-plan-v1.md](research/implementation-plan-v1.md). This file records what the review found, why the structure changed, and which findings still need a product decision.
+**Result:** the plan was restructured in place, then revised again after the owner's decisions on 2026-10-08 (see [Owner decisions, round 1](#owner-decisions-round-1-2026-10-08)). The original plan is preserved as [research/implementation-plan-v1.md](implementation-plan-v1.md). This file records what the review found, why the structure changed, and which findings still need a product decision.
 
 ## Summary
 
