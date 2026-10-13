@@ -295,3 +295,11 @@ With this round, every finding of the final review is resolved. No owner decisio
 ### Final consistency check (2026-10-13)
 
 A last pass over the whole plan found only wording gaps, fixed directly: the `Songs` folder location in the glossary and §9.3 now matches the Android folder grant (§9.5); registration links to draft legal pages until they're published (R-AUTH-10); §7.9 downloads follow D-30 on Android; the web's Sentry setup stores nothing (R-WEB); M1 tests now cover the password policy and terms acceptance. Every internal anchor and relative link resolves.
+
+### Screen descriptions (2026-10-13)
+
+The owner asked whether the screen descriptions covered the changes. They didn't fully: several behaviors existed only in flows. §8 now covers them:
+
+- §8.3 gained a **Web** column and new rows: Web coming soon, Reset password page, Accept new terms, Update required, Android folder setup. Songs lists every state-dependent action (**Cancel sync**, **Relink**, **Use changed file**); Settings and Profile list their new items.
+- New §8.6 (every dialog and prompt), §8.7 (loading, empty, offline, error and signed-out states) and §8.8 (message catalog in `en` and `pt-BR`, sourced from the rules that define each message).
+- Typography, spacing, icons and motion are now an M0 design task (§8.1, M0). M6 tests that every screen has its states and every message is translated.

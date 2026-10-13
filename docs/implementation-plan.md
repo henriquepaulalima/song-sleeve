@@ -15,7 +15,7 @@
 | [5. Data model](#5-data-model) | Server PostgreSQL and device-local schemas |
 | [6. API](#6-api) | Endpoints grouped by module and the shared request contract |
 | [7. Flows](#7-flows) | Step-by-step behavior that combines the rules |
-| [8. Screens and player](#8-screens-and-player) | UI requirements and visual tokens |
+| [8. Screens and player](#8-screens-and-player) | Screens, dialogs, shared states, messages, the landing page and visual tokens |
 | [9. Platform adapters](#9-platform-adapters) | Web, desktop and mobile specifics |
 | [10. Infrastructure](#10-infrastructure-and-operations) | Railway, bucket, Vercel, deployment, operations |
 | [11. Open decisions and spikes](#11-open-decisions-and-spikes) | Everything not yet decided or proven (`D-…`, `S-…`) |
@@ -833,7 +833,7 @@ Contrast rules:
 - **Links** use Sand (6.32:1) or white.
 - **State** is never shown by color alone.
 
-Typography, spacing, icons and motion are still to be defined.
+Typography, spacing, icons and motion are still to be defined. They are an **M0 design task**: a short design-system page (type scale, spacing scale, icon set, motion rules) using these tokens, done before M1 screens are built.
 
 ### 8.2 Navigation and list content
 
@@ -843,21 +843,28 @@ In installed apps, lists merge the server replica with this device's local songs
 
 ### 8.3 Screen requirements
 
-| Screen | Requirements |
-| --- | --- |
-| Start | Welcome screen with **Log in** and **Register**, and a language switch (**English** / **Português (Brasil)**) used until login |
-| Login / Register | Registering with email and password creates the account and signs the user in, with a 90-day session; no verification email (R-AUTH-1). A taken email shows `email_unavailable` (R-AUTH-2). Password rules are shown under the field (R-AUTH-9). The terms checkbox is required (R-AUTH-10). Login creates a 90-day session. **Forgot password?** link. The language switch from Start stays available |
-| Password recovery | See §7.12. Success returns to Login without signing in |
-| Home | Three one-row previews (Songs, Groups, Playlists), newest first by creation time (D-36). Each has **See all**, which opens Library with that type selected. **Add songs** |
-| Library | Card grid, filtered by the saved type preference (R-ORG-7). **Create playlist** and **Create group** open name modals (online). Search |
-| Songs | Every song in library order, with search. Each row shows the name, the artist (linking to the Artist page), a status badge, a drag handle and a menu. Menu actions: **Edit**, **Add to playlist**, **Replace audio file**, **Sync to cloud** (local songs; **Coming soon** without cloud sync, R-CLOUD-8), **Try again** (failed syncs), and **Delete song**. The header also offers **Retry failed syncs** when any song in the list failed (D-25). **Add songs**. In installed apps the header shows **Sync to cloud** or a status, which opens the library scope modal |
-| Playlist detail | Songs in playlist order. The header has the scope action or status, rename, delete (the songs stay), and **Add to groups**. **Add songs to playlist** opens a searchable picker. The row menu has the Songs actions plus **Remove from playlist**. Other devices show only the playlist's synced songs |
-| Group detail | Playlists in group order. The header has the scope action or status (covering the songs of all its playlists), rename, and delete (the playlists stay). **Add playlists** picks playlists only. Row menu: **Rename playlist**, **Remove from group**, and **Delete playlist…**, which warns that the playlist leaves every group |
-| Artists | The account's artists, plus artist names used only by this device's local songs. An artist page lists that artist's songs in library order. Server artists can be renamed, and deleted when no song uses them |
-| Player bar | Placeholder cover, title and artist, play/pause. Tapping it opens Playing. Shows pending-change notices (R-PIN-1). On the web, shows loading progress while the whole song is fetched |
-| Playing | Placeholder cover, name and artist, a seek bar (elapsed and total time; disabled until the duration is known), play/pause, previous, next, shuffle, repeat-one, and the Songs menu actions. Previous and next are disabled at the ends of the queue. With nothing loaded, every control is disabled |
-| Settings (installed apps) | **Check Songs folder** runs the full folder check (§7.13) and shows its result: songs restored, extra files removed, songs that still need a download. Shows where the `Song Sleeve` folder is and warns: "Only synced songs belong here. Files you add here are permanently deleted, and files you change are restored." **Send crash reports** (on by default, D-35). Android also has **Download synced songs over mobile data** (off by default, D-30) |
-| Profile | Email. **Language:** English (default) or Português (Brasil), saved on the account; it applies on every device and to emails (D-14). Cloud storage: "x GB of 25 GB used", with a warning at 90% (R-LIM-5). Counts of synced songs and of local songs on this device, with the notice that local songs exist only on this device. Sessions, with per-device logout, **Log out all devices** and **Log out current session**. Installed apps also offer **Log out and remove from this device** (§7.12). **Change password** (R-AUTH-8). The email is shown but can't be changed (R-AUTH-7). **Delete account** (§7.11) |
+Every screen exists on all clients unless the **Web** column says otherwise. Dialogs are in §8.6, shared states in §8.7, and every message in §8.8.
+
+| Screen | Requirements | Web |
+| --- | --- | --- |
+| Start | Welcome screen with **Log in** and **Register**, and a language switch (**English** / **Português (Brasil)**) used until login | Only allowlisted accounts get past it (R-WEB-ACCESS) |
+| Login / Register | Registering with email and password creates the account and signs the user in, with a 90-day session; no verification email (R-AUTH-1). A taken email shows `email_unavailable` (R-AUTH-2). Password rules are shown under the field and checked as the user types (R-AUTH-9). The terms checkbox links to the Terms of Use and Privacy Policy and is required (R-AUTH-10). Login creates a 90-day session. **Forgot password?** link. The language switch from Start stays available | A non-allowlisted email or account opens **Web coming soon** instead of signing in |
+| Web coming soon (web only) | Shown for `web_app_unavailable`: the message, the download buttons from the landing page (§8.5), and **Back** | Web only |
+| Password recovery | **Forgot password?** form: email field, then the generic "If an account exists, we sent a link" message (§7.12) | Same |
+| Reset password page | Public route of the web app, opened from the email link (D-27). States: **checking link**; **new password** form with the rules (R-AUTH-9) and a confirm field; **success**: "Your password was changed. Log in in the Song Sleeve app." (allowlisted accounts also get **Log in on the web**); **expired or used link** with **Send a new link**. Never creates a web session. Hardening per §7.12 | Web only, open to every account |
+| Accept new terms | Shown after login when `terms_version` changed (R-AUTH-10): a summary of what changed, links to both documents, **Accept** and **Log out**. Nothing else is reachable until accepted | Same |
+| Update required | Shown for `client_update_required` (§4.4): "Update Song Sleeve to keep syncing." with **Update** (auto-update, the `.deb` download, or the store/APK link). Installed apps can dismiss it to keep playing and editing local songs; sync and server edits stay blocked | A reload loads the new web build; shown only if it persists |
+| Android folder setup (Android only) | First sign-in: explains the `Song Sleeve` folder (only synced songs; files added there are deleted, D-21), then **Choose folder** opens the system picker at the top of storage with "Create or select a folder named Song Sleeve" (§9.5). Picking another folder is accepted and its path is shown. Can't be skipped while the account has cloud sync | — |
+| Home | Three one-row previews (Songs, Groups, Playlists), newest first by creation time (D-36). Each has **See all**, which opens Library with that type selected. **Add songs** | Same, synced songs only |
+| Library | Card grid, filtered by the saved type preference (R-ORG-7). **Create playlist** and **Create group** open name modals (online). Search | Paginated |
+| Songs | Every song in library order, with search. Each row shows the name, the artist (linking to the Artist page), a status badge (§3), a drag handle and a menu. Menu actions depend on the song's state: **Edit**, **Add to playlist**, **Replace audio file**, **Sync to cloud** (local songs; **Coming soon** without cloud sync, R-CLOUD-8), **Cancel sync** (queued or syncing songs, §7.8), **Try again** (failed syncs), **Relink** (relink needed or access lost, §7.7.1), **Use changed file** (file changed, §7.7.1), and **Delete song**. The header also offers **Retry failed syncs** when any song in the list failed (D-25). **Add songs**. In installed apps the header shows **Sync to cloud** or a status, which opens the library scope dialog | Synced songs only, paginated; no **Sync to cloud**, **Relink** or **Use changed file**; the header shows only the sync status |
+| Playlist detail | Songs in playlist order. The header has the scope action or status, rename, delete (the songs stay), and **Add to groups**. **Add songs to playlist** opens a searchable picker. The row menu has the Songs actions plus **Remove from playlist**. Other devices show only the playlist's synced songs | Synced songs only |
+| Group detail | Playlists in group order. The header has the scope action or status (covering the songs of all its playlists), rename, and delete (the playlists stay). **Add playlists** picks playlists only. Row menu: **Rename playlist**, **Remove from group**, and **Delete playlist…**, which warns that the playlist leaves every group | Status only |
+| Artists | The account's artists, plus artist names used only by this device's local songs. An artist page lists that artist's songs in library order. Server artists can be renamed, and deleted when no song uses them | Server artists only |
+| Player bar | Placeholder cover, title and artist, play/pause. Tapping it opens Playing. Shows pending-change notices (R-PIN-1) | Also shows download progress and **Cancel** while the whole song is fetched (§9.2) |
+| Playing | Placeholder cover, name and artist, a seek bar (elapsed and total time; disabled until the duration is known), play/pause, previous, next, shuffle, repeat-one, and the Songs menu actions. Previous and next are disabled at the ends of the queue. With nothing loaded, every control is disabled. No volume control (D-36) | Same; the queue starts empty after a reload (R-WEB) |
+| Settings (installed apps) | **Check Songs folder** runs the full folder check (§7.13) and shows its result: songs restored, extra files removed, songs that still need a download. Shows where the `Song Sleeve` folder is and warns: "Only synced songs belong here. Files you add here are permanently deleted, and files you change are restored." **Send crash reports** (on by default, D-35). Android also has **Download synced songs over mobile data** (off by default, D-30) and **Change folder** (repeats the folder setup). Linux shows missing GStreamer codecs, if any (§9.4). Shows the app version and **Check for updates** | No Settings screen |
+| Profile | Email. **Language:** English (default) or Português (Brasil), saved on the account; it applies on every device and to emails (D-14). Cloud storage: "x GB of 25 GB used", with a warning at 90% (R-LIM-5), shown only with cloud sync. Counts of synced songs and of local songs on this device, with the notice that local songs exist only on this device. Sessions: each device with platform, label and last active, per-device logout, **Log out all devices** and **Log out current session**. Installed apps also offer **Log out and remove from this device** (§7.12). **Change password** (R-AUTH-8, rules from R-AUTH-9). The email is shown but can't be changed (R-AUTH-7). Links to the Terms of Use and Privacy Policy. **Delete account** (§7.11) | No local-song count and no **Log out and remove** |
 
 ### 8.4 Player
 
@@ -884,6 +891,49 @@ The only public web page in this release (D-26). It lives in `apps/site`, separa
   - The Google Play data-safety form is filled in from the Privacy Policy.
 - **Language:** English by default, with a Português (Brasil) switch; the browser language picks the first one.
 - **Constraints:** static and prerendered for search engines. No API calls, cookies, analytics or third-party scripts, and nothing stored (R-SITE). It never links to the web app (R-WEB-ACCESS).
+
+### 8.6 Dialogs and prompts
+
+| Dialog | Opened from | Content and actions |
+| --- | --- | --- |
+| **Add songs** | Home, Songs | §7.1 (installed apps) or §7.2 (web): file and folder pickers, the review list with Name and smart Artist search per row, invalid rows flagged with their reason, the optional playlist, **Sync to cloud now** (or **Coming soon**), the device-only explanation, **Add** and **Cancel**. Web: the cloud banner and **Keep only on this device**, which shows the install-app alert |
+| **Edit song** | Song menu | Name and Artist (smart search, **Did you mean…?**; R-ORG-2), field limits (§4.4). Synced songs need a connection |
+| **Replace audio file** | Song menu | The picker, then the suggestion step for Name and Artist (**Keep current**, **Use new**, or edit; R-MUT-5), then **Confirm**. Shows the folder check running first for synced songs (§7.7) |
+| **Relink** | Song menu | The picker; on a different file, continues into **Replace audio file** (§7.7.1) |
+| **Sync scope** | **Sync to cloud** on Songs, a playlist or a group | §7.4: scope name, songs already synced, local songs to upload with the estimated size, songs needing attention, **Sync to cloud** and **Cancel**. When enabled: status and **Pause automatic sync** |
+| **Add to playlist** / **Add to groups** / **Add songs to playlist** / **Add playlists** | Menus and headers | Searchable picker with multi-select and **Add** |
+| **Create / rename** playlist or group | Library, headers | Name field with the limits (§4.4); online |
+| **Delete confirmations** | Delete song, playlist, group, artist | The exact texts in §7.8 and §8.3 |
+| **Large folder cleanup** | Folder check (§7.13) | "Song Sleeve found {n} files that aren't synced songs. Delete them permanently?" **Delete** / **Keep for now** |
+| **Log out and remove from this device** | Profile | The warning from §7.12, **Log out and remove** and **Cancel** |
+| **Delete account** | Profile | §7.11: consequences, current password (reauthentication), the confirmation text, **Permanently delete account**; then a progress state until the device purge finishes |
+| **Change password** | Profile | Current password, new password with the rules (R-AUTH-9), confirm; success says other devices were signed out |
+| **Install-app alert** | Web **Keep only on this device** | R-CLOUD-2 text and the download buttons |
+| **Close tab while uploading** (web) | Browser close | The browser's leave-page prompt (§7.2) |
+
+### 8.7 Shared screen states
+
+Every list and detail screen defines these states, using the messages in §8.8:
+
+- **Loading:** skeleton rows; on the web, while the catalog is fetched after a reload.
+- **Empty:** library with no songs ("No songs yet" with **Add songs**); playlist with no songs (**Add songs to playlist**); group with no playlists (**Add playlists**); no artists; search with no results ("No results for '{query}'").
+- **Offline:** installed apps keep browsing and playing; any server change shows `connection_required` (R-MUT-1). The web shows a banner "You're offline" and disables changes.
+- **Error:** a failed load shows the error with **Try again**; an unknown change result shows the R-MUT-4 message.
+- **Signed out or expired session:** installed apps keep local browsing and playback and ask to sign in for server actions (§7.12); the web returns to Login.
+- **Account being deleted:** a blocking progress screen until the purge finishes (§7.11).
+
+### 8.8 Message catalog
+
+All user-visible text lives in the translation layer (§4.4) with an `en` and a `pt-BR` entry, and is reviewed in both languages before M6. The catalog is generated from these sources, so no message is defined twice:
+
+| Group | Messages (defined in) |
+| --- | --- |
+| Accounts | `email_unavailable` (R-AUTH-2), password rules and errors (R-AUTH-9), terms (R-AUTH-10), reset page states (§8.3), password-changed notice (R-AUTH-8), `web_app_unavailable` (R-WEB-ACCESS), `client_update_required` (§4.4), `account_suspended` (§10.5) |
+| Songs and sync | Status labels (§3), `connection_required` and the unknown-result message (R-MUT-1, R-MUT-4), sync failure reasons (R-ID-4), **Coming soon** and `cloud_sync_unavailable` (R-CLOUD-8), install-app alert (R-CLOUD-2), storage full and 90% warning (R-LIM-5), limit errors (R-LIM-4), import and device-only notices (§7.1, R-OWN-2), pin notices (R-PIN-1) |
+| Files and devices | Folder warnings and cleanup prompt (§7.13, §8.3), relink and changed-file states (§7.7.1), Android low storage and Wi-Fi wait (D-30), missing Linux codecs (§9.4), logout-and-remove warning (§7.12) |
+| Deletion | Delete confirmations (§7.8), account deletion text (§7.11) |
+| Emails | Password reset and password changed, in the account's language (D-14) |
+| Landing page | §8.5, including the Windows SmartScreen note (D-34) |
 
 ---
 
@@ -1135,7 +1185,7 @@ Every milestone depends only on earlier ones.
 
 | Milestone | Builds | Depends on |
 | --- | --- | --- |
-| **M0 Foundations** | Repository layout and CI; the OpenAPI skeleton; Gin, pgx, sqlc and Goose; the error envelope; local Postgres and MinIO; a React shell with routing; design tokens and i18n scaffolding with `en` (default) and `pt-BR`; the test harness and audio fixtures. The spikes start | — |
+| **M0 Foundations** | Repository layout and CI; the OpenAPI skeleton; Gin, pgx, sqlc and Goose; the error envelope; local Postgres and MinIO; a React shell with routing; design tokens, the design-system page (typography, spacing, icons, motion; §8.1) and i18n scaffolding with `en` (default) and `pt-BR`; the test harness and audio fixtures. The spikes start | — |
 | **M1 Accounts and devices** | Register (no verification), login and logout; the account language; 90-day sessions; device registration; Profile sessions; password reset and change; email jobs through Resend (test sender until the custom domain, §10.3); the Vercel `/api` rewrite; the web access gate (`web_app_unavailable`, `noindex`; R-WEB-ACCESS); cookie and bearer session transports; the client version check (`client_update_required`); web device records; reauthentication. **Server-side** account deletion: ledger, wipe, user row last, receipts, restricted status and ack. Web clearing on logout or deletion | M0 |
 | **M2 Mutation and event backbone** | Receipts and revision checks; `account_events`; the change feed and snapshot; SSE with replay; the web in-memory catalog store and Device Sync Service (R-WEB); the `connection_required` UX; status recovery for outstanding requests | M1, S6 |
 | **M3 Web app (cloud-only, owner-only)** | The upload pipeline: operation slot, heartbeats and grants (R-SYNC-5); all-or-nothing syncs with failure rollback, stall detection and progress hints; staging upload; worker verification and publication; content switch. Web **Add songs** with auto-sync and the install-app alert. Artists, playlists, groups, ordering keys, the Library preference and search across every screen. **Replace audio file** with the suggestion step. **Delete song**. The web player (whole-song Blob, Media Session) with pins. Cloud cleanup jobs. The storage quota with reservations and the Profile usage display. The queue-IDs endpoint. Sandboxed ffprobe. The admin CLI (§10.5) | M2, S3, S4 |
@@ -1280,6 +1330,7 @@ Every item must pass in staging before its milestone closes.
 **M6**
 
 - Landing page: every download button serves the current build (Windows unsigned until D-34's launch choice, with the SmartScreen note); OS detection highlights the right one; both languages render; it makes no API calls, sets no cookies and never links to the web app; it is indexed while the web app is not.
+- Every screen in §8.3 and dialog in §8.6 has its loading, empty, offline and error states (§8.7), and every message in §8.8 exists in `en` and `pt-BR`.
 - CORS and CSRF hold, and rate limits work across replicas.
 - Alerts fire on stalled deletion or cleanup, and the cost dashboard is live.
 
