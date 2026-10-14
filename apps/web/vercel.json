@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://REPLACE-WITH-RAILWAY-API-DOMAIN/api/:path*" },
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }] },
+    { "source": "/reset", "headers": [{ "key": "Referrer-Policy", "value": "no-referrer" }, { "key": "Cache-Control", "value": "no-store" }] }
+  ]
+}
