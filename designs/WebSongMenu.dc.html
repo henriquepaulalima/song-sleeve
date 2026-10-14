@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Song menu · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:-2px}
+.mi{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;min-height:46px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:#FFFFFF;font:500 15px 'Instrument Sans',sans-serif;text-align:left;text-decoration:none;cursor:pointer}
+.mi:hover{background:#4C4C47}
+.mi:disabled{color:#ADA99E;cursor:not-allowed}
+.pl{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:#FFFFFF;font:500 14px 'Instrument Sans',sans-serif;text-align:left;cursor:pointer}
+.pl:hover{background:#4C4C47}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; background: #2D2D2A; font-family: 'Instrument Sans', sans-serif; color: #FFFFFF">
+  <div aria-hidden="true" style="position: absolute; inset: 0"><dc-import name="WebSongs" hint-size="1440px,900px"></dc-import></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(22,22,21,.2)"></div>
+
+  <div role="menu" aria-label="Actions for {{name}}" style="position: absolute; right: 64px; top: 430px; width: 300px; padding: 6px; border-radius: 16px; background: #3A3A36; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 30px 50px -16px rgba(0,0,0,.95)">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 10px; margin-bottom: 4px; box-shadow: inset 0 -1px 0 rgba(255,255,255,.08)">
+      <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 8px; background: #4C4C47; color: #E5DCC5; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+      <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0"><strong style="font-size: 14px">{{name}}</strong><span style="align-self: flex-start; padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; background: {{bBg}}; color: {{bFg}}; box-shadow: {{bRing}}">{{badge}}</span></span>
+    </div>
+    <sc-for list="{{actions}}" as="a" hint-placeholder-count="5">
+      <sc-if value="{{a.divider}}" hint-placeholder-val="{{ false }}"><div aria-hidden="true" style="height: 1px; margin: 4px 10px; background: rgba(255,255,255,.08)"></div></sc-if>
+      <sc-if value="{{a.isLink}}" hint-placeholder-val="{{ true }}">
+        <a class="mi" role="menuitem" href="{{a.href}}"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: {{a.dot}}; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span>{{a.label}}</span><sc-if value="{{a.hasSub}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #CCC8BC">{{a.sub}}</span></sc-if></span></a>
+      </sc-if>
+      <sc-if value="{{a.isButton}}" hint-placeholder-val="{{ false }}">
+        <button class="mi" role="menuitem" type="button" onClick="{{a.run}}" disabled="{{a.disabled}}" aria-haspopup="{{a.popup}}" style="background: {{a.bg}}"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: {{a.dot}}; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span>{{a.label}}</span><sc-if value="{{a.hasSub}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #CCC8BC">{{a.sub}}</span></sc-if></span><sc-if value="{{a.soon}}" hint-placeholder-val="{{ false }}"><span style="padding: 2px 8px; border-radius: 999px; background: #4C4C47; color: #E5DCC5; font-size: 11px; font-weight: 700">Coming soon</span></sc-if><sc-if value="{{a.chev}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; color: #CCC8BC"><path d="m15 18-6-6 6-6"></path></svg></sc-if></button>
+      </sc-if>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{sub}}" hint-placeholder-val="{{ true }}">
+    <div role="menu" aria-label="Add to playlist" style="position: absolute; right: 372px; top: 500px; width: 270px; padding: 6px; border-radius: 16px; background: #3A3A36; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 30px 50px -16px rgba(0,0,0,.95)">
+      <p style="margin: 6px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .14em; color: #CCC8BC">ADD TO PLAYLIST</p>
+      <sc-for list="{{playlists}}" as="p" hint-placeholder-count="4">
+        <button class="pl" type="button" role="menuitemcheckbox" aria-checked="{{p.checked}}" onClick="{{p.toggle}}"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: {{p.boxBg}}; box-shadow: {{p.boxRing}}; color: #161615; flex: none"><sc-if value="{{p.on}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke-width: 3"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span><span style="flex: 1">{{p.name}}</span></button>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"song":{"editor":"enum","options":["relink","synced","local","localNoCloud","syncing","failed","changed","webSynced"],"default":"relink"},"inPlaylist":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sub: true, picked: { 'Late Night': true } };
+  }
+  renderVals() {
+    const st = this.state;
+    const song = this.props.song ?? 'relink';
+    const inPl = this.props.inPlaylist ?? false;
+    const L = (label, href, sub, danger) => ({ label, href, sub, danger, isLink: true });
+    const B = (label, sub, extra) => ({ label, sub, isButton: true, ...(extra || {}) });
+    const edit = L('Edit', 'WebEditSong.dc.html');
+    const add = B('Add to playlist', '', { chev: true, popup: 'menu', run: () => this.setState({ sub: !this.state.sub }), bg: st.sub ? '#4C4C47' : 'transparent' });
+    const replace = L('Replace audio file', 'WebUpdateSource.dc.html');
+    const del = { ...L('Delete song', 'WebDeleteSong.dc.html', '', true), divider: true };
+    const map = {
+      synced: [edit, add, replace, del],
+      webSynced: [edit, add, replace, del],
+      local: [edit, add, replace, B('Sync to cloud', 'Upload it so all your devices have it'), del],
+      localNoCloud: [edit, add, replace, B('Sync to cloud', '', { disabled: true, soon: true }), del],
+      syncing: [edit, add, B('Cancel sync', 'It stays on this computer'), del],
+      failed: [B('Try again', 'Sync failed: the upload stopped'), edit, add, replace, del],
+      relink: [L('Relink', 'WebUpdateSource.dc.html', 'Find the file again'), edit, add, del],
+      changed: [L('Use changed file', 'WebUpdateSource.dc.html', 'Read the file again and review'), edit, add, del]
+    };
+    const acts = map[song].slice();
+    if (inPl) acts.splice(acts.length - 1, 0, { ...B('Remove from playlist', 'The song stays in your library'), divider: true });
+    const badges = { synced: ['Synced', 'q'], webSynced: ['Synced', 'q'], local: ['On this device', 'o'], localNoCloud: ['On this device', 'o'], syncing: ['Syncing… 42%', 'p'], failed: ['Sync failed', 'a'], relink: ['Relink needed', 'a'], changed: ['File changed', 'a'] };
+    const K = { q: ['transparent', '#D9D5CA', 'none'], o: ['transparent', '#EDEAE2', 'inset 0 0 0 1px rgba(255,255,255,.35)'], p: ['#4C4C47', '#E5DCC5', 'none'], a: ['#E5DCC5', '#161615', 'none'] };
+    const names = { synced: 'Harbor Lights', webSynced: 'Harbor Lights', local: 'Rehearsal take 3', localNoCloud: 'Rehearsal take 3', syncing: 'Night Market', failed: 'Late Train to Lisbon', relink: 'Undertow', changed: 'Glass Garden' };
+    const [badge, k] = badges[song];
+    return {
+      name: names[song],
+      badge, bBg: K[k][0], bFg: K[k][1], bRing: K[k][2],
+      sub: st.sub,
+      actions: acts.map((a) => ({
+        ...a, isLink: !!a.isLink, isButton: !!a.isButton, divider: !!a.divider,
+        hasSub: !!a.sub, disabled: !!a.disabled, soon: !!a.soon, chev: !!a.chev,
+        popup: a.popup ?? 'false', bg: a.bg ?? 'transparent', run: a.run ?? (() => {}),
+        dot: a.danger ? '#F26419' : '#E5DCC5'
+      })),
+      playlists: ['Sunday Drive', 'Late Night', 'Focus', 'Kitchen Radio'].map((name) => {
+        const on = !!st.picked[name];
+        return { name, on, checked: on ? 'true' : 'false', boxBg: on ? '#E5DCC5' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 2px #CCC8BC', toggle: () => this.setState({ picked: { ...this.state.picked, [name]: !on } }) };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

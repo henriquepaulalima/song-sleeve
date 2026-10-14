@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Desktop sidebar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+.ws-nav{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:12px;text-decoration:none;font-size:15px}
+.ws-nav:hover{background:#3A3A36}
+.ws-h{margin:22px 12px 8px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:#CCC8BC}
+.ws-l{display:flex;align-items:center;gap:10px;min-height:38px;padding:0 12px;border-radius:10px;text-decoration:none;font-size:14px}
+.ws-l:hover{background:#3A3A36}
+.ws-nav:focus-visible,.ws-l:focus-visible,.ws-acct:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+@media (max-width: 760px){.ws-lists{display:none}}
+</style>
+</helmet>
+<aside aria-label="Sidebar" style="box-sizing: border-box; width: 100%; min-height: 100%; padding: 24px 14px 18px; background: #4C4C47; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; display: flex; flex-direction: column">
+  <a href="WebHome.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 0 10px; color: #FFFFFF; text-decoration: none">
+    <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; background: #3A3A36; position: relative; overflow: hidden; display: block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1)"><span style="position: absolute; right: -9px; top: 6px; width: 20px; height: 20px; border-radius: 50%; background: #F26419; box-shadow: 0 0 0 5px #161615"></span></span>
+    <span style="font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 20px; letter-spacing: -0.02em">Song Sleeve</span>
+  </a>
+  <nav aria-label="Main" style="margin-top: 24px; display: flex; flex-direction: column; gap: 2px">
+    <a class="ws-nav" href="WebHome.dc.html" aria-current="{{home.cur}}" style="background: {{home.bg}}; color: {{home.fg}}; font-weight: {{home.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M10 21v-6h4v6"></path></svg>Home</a>
+    <a class="ws-nav" href="WebLibrary.dc.html" aria-current="{{library.cur}}" style="background: {{library.bg}}; color: {{library.fg}}; font-weight: {{library.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>Library</a>
+    <a class="ws-nav" href="WebSongs.dc.html" aria-current="{{songs.cur}}" style="background: {{songs.bg}}; color: {{songs.fg}}; font-weight: {{songs.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="M21 15V6"></path><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M12 12H3"></path><path d="M16 6H3"></path><path d="M12 18H3"></path></svg>Songs</a>
+    <a class="ws-nav" href="WebArtists.dc.html" aria-current="{{artists.cur}}" style="background: {{artists.bg}}; color: {{artists.fg}}; font-weight: {{artists.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>Artists</a>
+    <a class="ws-nav" href="WebProfile.dc.html" aria-current="{{profile.cur}}" style="background: {{profile.bg}}; color: {{profile.fg}}; font-weight: {{profile.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>Profile</a>
+    <a class="ws-nav" href="WebSettings.dc.html" aria-current="{{settings.cur}}" style="background: {{settings.bg}}; color: {{settings.fg}}; font-weight: {{settings.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>Settings</a>
+  </nav>
+
+  <div class="ws-lists">
+    <p class="ws-h">PLAYLISTS</p>
+    <div style="display: flex; flex-direction: column">
+      <sc-for list="{{playlists}}" as="p" hint-placeholder-count="4">
+        <a class="ws-l" href="WebPlaylist.dc.html" aria-current="{{p.cur}}" style="background: {{p.bg}}; color: {{p.fg}}; font-weight: {{p.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; color: #E5DCC5"><path d="M21 15V6"></path><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M12 12H3"></path><path d="M16 6H3"></path></svg>{{p.name}}</a>
+      </sc-for>
+    </div>
+    <p class="ws-h">GROUPS</p>
+    <div style="display: flex; flex-direction: column">
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+        <a class="ws-l" href="WebGroup.dc.html" aria-current="{{g.cur}}" style="background: {{g.bg}}; color: {{g.fg}}; font-weight: {{g.w}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; color: #E5DCC5"><path d="m12 2 10 5-10 5L2 7z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg>{{g.name}}</a>
+      </sc-for>
+    </div>
+  </div>
+
+  <a class="ws-acct" href="WebProfile.dc.html" style="margin-top: auto; padding-top: 18px; display: flex; align-items: center; gap: 10px; padding-left: 10px; color: #FFFFFF; text-decoration: none; border-radius: 12px">
+    <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 50%; background: #E5DCC5; color: #161615; display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 14px; flex: none">A</span>
+    <span style="font-size: 13px; color: #D9D5CA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">alex@example.com</span>
+  </a>
+</aside>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"enum","options":["home","library","songs","artists","profile","settings"],"default":"songs"},"current":{"editor":"text","default":""},"$preview":{"width":260,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const a = this.props.active ?? 'songs';
+    const cur = this.props.current ?? '';
+    const nav = (k) => a === k
+      ? { bg: '#E5DCC5', fg: '#161615', w: '700', cur: 'page' }
+      : { bg: 'transparent', fg: '#FFFFFF', w: '500', cur: 'false' };
+    const item = (name) => cur === name
+      ? { name, bg: '#3A3A36', fg: '#FFFFFF', w: '700', cur: 'page' }
+      : { name, bg: 'transparent', fg: '#EDEAE2', w: '400', cur: 'false' };
+    return {
+      home: nav('home'), library: nav('library'), songs: nav('songs'), artists: nav('artists'), profile: nav('profile'), settings: nav('settings'),
+      playlists: ['Sunday Drive', 'Late Night', 'Focus', 'Kitchen Radio'].map(item),
+      groups: ['Travel', 'Moods', 'Work'].map(item)
+    };
+  }
+}
+</script>
+</body>
+</html>

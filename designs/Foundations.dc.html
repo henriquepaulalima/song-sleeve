@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Foundations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+.card{padding:22px;border-radius:22px;background:#4C4C47;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 20px 30px -20px rgba(0,0,0,.7)}
+.cap{margin:0 0 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:#CCC8BC}
+.sw{display:flex;flex-direction:column;justify-content:space-between;height:112px;padding:12px;border-radius:14px;box-sizing:border-box}
+.tok{font-family:'IBM Plex Mono',monospace;font-size:11px}
+.mini{display:flex;flex-direction:column;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#CCC8BC}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:600}
+</style>
+</helmet>
+<div style="width: 1200px; height: 1000px; box-sizing: border-box; padding: 40px; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-content: start">
+
+  <section class="card" style="grid-column: span 2">
+    <p class="cap">COLOR · CORE TOKENS</p>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+      <div class="sw" style="background: #2D2D2A; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18)"><span style="font-size: 22px; font-weight: 700">Aa</span><span><span style="display: block; font-size: 13px; font-weight: 600">Graphite · background</span><span class="tok">#2D2D2A · white 13.8:1</span></span></div>
+      <div class="sw" style="background: #4C4C47; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22)"><span style="font-size: 22px; font-weight: 700">Aa</span><span><span style="display: block; font-size: 13px; font-weight: 600">Charcoal · surface</span><span class="tok">#4C4C47 · white 8.6:1</span></span></div>
+      <div class="sw" style="background: #E5DCC5; color: #161615"><span style="font-size: 22px; font-weight: 700">Aa</span><span><span style="display: block; font-size: 13px; font-weight: 600">Sand Dune · secondary</span><span class="tok">#E5DCC5 · ink 13.3:1</span></span></div>
+      <div class="sw" style="background: #F26419; color: #161615"><span style="font-size: 22px; font-weight: 700">Aa</span><span><span style="display: block; font-size: 13px; font-weight: 600">Blaze Orange · primary</span><span class="tok">#F26419 · ink 5.7:1</span></span></div>
+    </div>
+    <p class="cap" style="margin-top: 18px">DERIVED TONES (PROPOSED)</p>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px">
+      <div class="mini"><span style="height: 40px; border-radius: 10px; background: #3A3A36; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12)"></span>Well #3A3A36</div>
+      <div class="mini"><span style="height: 40px; border-radius: 10px; background: #252522; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12)"></span>Track #252522</div>
+      <div class="mini"><span style="height: 40px; border-radius: 10px; background: #5E5E58"></span>Raised #5E5E58</div>
+      <div class="mini"><span style="height: 40px; border-radius: 10px; background: #161615"></span>Ink #161615</div>
+      <div class="mini"><span style="height: 40px; border-radius: 10px; background: #D9D5CA"></span>Muted #D9D5CA</div>
+      <div class="mini"><span style="height: 40px; border-radius: 10px; background: #CCC8BC"></span>Muted 2 #CCC8BC</div>
+    </div>
+    <p style="margin: 16px 0 0; font-size: 13px; line-height: 1.5; color: #D9D5CA">Near-black ink on Orange and Sand, never white. Sand (6.3:1 on Charcoal) carries selected states, progress and text accents; Orange stays a fill or graphic accent, never body text. Selection always comes with an icon, a label or a heavier weight.</p>
+  </section>
+
+  <section class="card">
+    <p class="cap">TYPE · PROPOSAL FOR THE M0 DESIGN-SYSTEM TASK</p>
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <div><div style="font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 34px; letter-spacing: -0.02em; line-height: 1">Song Sleeve</div><div class="tok" style="color: #CCC8BC; margin-top: 6px">Archivo Expanded 800 · display</div></div>
+      <div><div style="font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 24px; letter-spacing: -0.015em">Sunday Drive</div><div class="tok" style="color: #CCC8BC; margin-top: 4px">Archivo 118% 800 · page titles</div></div>
+      <div><div style="font-size: 15px; line-height: 1.5">Harbor Lights · Marina Okafor<br><span style="color: #CCC8BC">Instrument Sans for everything you read and tap.</span></div><div class="tok" style="color: #CCC8BC; margin-top: 4px">Instrument Sans 400–700 · UI</div></div>
+      <div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 500">1:24 / 3:52 · 18/42</div><div class="tok" style="color: #CCC8BC; margin-top: 4px">IBM Plex Mono · times, counts, files</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <p class="cap">ACTIONS</p>
+    <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start">
+      <span style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 16px; background: #F26419; color: #161615; font-weight: 700">Primary action</span>
+      <span style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 16px; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.6); font-weight: 600">Secondary</span>
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px">
+        <span style="width: 44px; height: 44px; border-radius: 50%; background: #2D2D2A; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 8px 16px -8px rgba(0,0,0,.7)"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg></span>
+        <span style="width: 64px; height: 64px; border-radius: 50%; background: #F26419; color: #161615; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 12px 20px -10px rgba(0,0,0,.8)"><svg class="i" viewBox="0 0 24 24" style="width: 26px; height: 26px; margin-left: 3px"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg></span>
+        <span style="padding: 8px 14px; border-radius: 999px; background: #E5DCC5; color: #161615; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px"><svg class="i" viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke-width: 2.8"><path d="M20 6 9 17l-5-5"></path></svg>Songs</span>
+      </div>
+      <p style="margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: #D9D5CA">Raised round controls sit on soft shadows. Touch targets are 44 px or larger.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <p class="cap">SONG STATUS BADGES (§3)</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px">
+      <span class="chip" style="color: #D9D5CA; padding-left: 4px"><svg class="i" viewBox="0 0 24 24" style="width: 15px; height: 15px"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path><path d="m9 14 2 2 4-4"></path></svg>Synced</span>
+      <span class="chip" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); color: #EDEAE2">On this device</span>
+      <span class="chip" style="background: #3A3A36; color: #E5DCC5">Queued</span>
+      <span class="chip" style="background: #3A3A36; color: #E5DCC5">Syncing… 42%</span>
+      <span class="chip" style="background: #3A3A36; color: #E5DCC5">Updating audio… 70%</span>
+      <span class="chip" style="background: #3A3A36; color: #E5DCC5">Downloading 30%</span>
+      <span class="chip" style="background: #3A3A36; color: #E5DCC5">Update after playback</span>
+      <span class="chip" style="background: #3A3A36; color: #E5DCC5">Waiting for another sync operation</span>
+      <span class="chip" style="background: #E5DCC5; color: #161615">Sync failed</span>
+      <span class="chip" style="background: #E5DCC5; color: #161615">Needs attention</span>
+      <span class="chip" style="background: #E5DCC5; color: #161615">Relink needed</span>
+      <span class="chip" style="background: #E5DCC5; color: #161615">File changed</span>
+      <span class="chip" style="background: #E5DCC5; color: #161615">Access lost</span>
+      <span class="chip" style="background: #E5DCC5; color: #161615">Needs download</span>
+    </div>
+    <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: #D9D5CA">Outline: local only. Dark fill: work in progress (with a progress line on the row). Sand fill: you need to act. Each badge also has its own icon.</p>
+  </section>
+
+  <section class="card">
+    <p class="cap">SLEEVE · COVER PLACEHOLDER</p>
+    <div style="display: flex; align-items: flex-end; gap: 14px">
+      <span style="width: 44px; height: 44px; border-radius: 9px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08)"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+      <span style="position: relative; width: 84px; height: 84px; border-radius: 12px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center"><span style="position: absolute; inset: 6px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1)"></span><svg class="i" viewBox="0 0 24 24" style="width: 28px; height: 28px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+      <span style="position: relative; width: 132px; height: 132px; border-radius: 16px; background: #2D2D2A; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 18px 28px -14px rgba(0,0,0,.85)"><span style="position: absolute; inset: 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14)"></span><svg class="i" viewBox="0 0 24 24" style="width: 40px; height: 40px; stroke-width: 1.7"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+    </div>
+    <p style="margin: 14px 0 0; font-size: 13px; line-height: 1.5; color: #D9D5CA">A square with just a song icon until cover art arrives. The thin inner frame is the "sleeve".</p>
+  </section>
+
+  <section class="card" style="grid-column: span 2">
+    <p class="cap">SONG ROW · SHARED BY SONGS, PLAYLIST AND ARTIST (SEE THE SONG ROW PARTS)</p>
+    <div style="display: flex; align-items: center; gap: 8px; min-height: 64px; padding: 6px 4px 6px 0; border-radius: 14px; background: #3A3A36">
+      <span style="width: 30px; display: flex; justify-content: center; color: #ADA99E"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><circle class="f" cx="9" cy="6" r="1.5"></circle><circle class="f" cx="15" cy="6" r="1.5"></circle><circle class="f" cx="9" cy="12" r="1.5"></circle><circle class="f" cx="15" cy="12" r="1.5"></circle><circle class="f" cx="9" cy="18" r="1.5"></circle><circle class="f" cx="15" cy="18" r="1.5"></circle></svg></span>
+      <span style="width: 44px; height: 44px; border-radius: 9px; background: #4C4C47; color: #E5DCC5; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 15px; font-weight: 600">Copper Sky</span><span style="font-size: 13px; color: #CCC8BC; text-decoration: underline; text-underline-offset: 3px">The Low Tides</span></span>
+      <span style="color: #CCC8BC; display: flex"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path><path d="m9 14 2 2 4-4"></path></svg></span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #CCC8BC; margin: 0 6px">4:07</span>
+      <span style="width: 40px; display: flex; justify-content: center"><svg class="i" viewBox="0 0 24 24"><circle class="f" cx="5" cy="12" r="1.7"></circle><circle class="f" cx="12" cy="12" r="1.7"></circle><circle class="f" cx="19" cy="12" r="1.7"></circle></svg></span>
+    </div>
+    <div style="display: grid; grid-template-columns: 30px 52px 1fr 26px 52px 40px; gap: 0; margin-top: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #CCC8BC; text-align: center">
+      <span>drag</span><span>sleeve</span><span style="text-align: left; padding-left: 8px">name · artist link</span><span>cloud</span><span>time</span><span>menu</span>
+    </div>
+    <p style="margin: 14px 0 0; font-size: 13px; line-height: 1.5; color: #D9D5CA">Artist pages use the same row without the drag handle, since they follow library order. The playing row gets a Sand outline, an equalizer sleeve and a Sand title.</p>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

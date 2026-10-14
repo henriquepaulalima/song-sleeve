@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.card{padding:22px;border-radius:22px;background:#4C4C47;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 20px 30px -20px rgba(0,0,0,.7)}
+.cap{margin:0 0 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;font-weight:500;color:#CCC8BC}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 18px;border-radius:14px;border:0;font:600 15px 'Instrument Sans',sans-serif;cursor:pointer;text-decoration:none}
+.res{display:flex;align-items:center;justify-content:space-between;font-size:14px;padding:8px 0}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; position: relative">
+  <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+    <div style="flex: 1 1 240px; max-width: 100%; display: flex; background: #4C4C47; box-shadow: 1px 0 0 rgba(255,255,255,.06)"><dc-import name="WebSidebar" active="settings" hint-size="100%,900px"></dc-import></div>
+    <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px clamp(16px, 3vw, 40px) 48px">
+      <div style="max-width: 1120px; margin: 0 auto">
+        <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 40px; letter-spacing: -0.02em">Settings</h1>
+        <div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+          <section class="card" aria-labelledby="h-folder" style="flex: 1.4 1 460px; min-width: 0">
+            <p id="h-folder" class="cap">SONG SLEEVE FOLDER</p>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #3A3A36"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; color: #E5DCC5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg><span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px">{{path}}</span></div>
+            <p style="margin: 12px 0 0; display: flex; gap: 10px; font-size: 14px; line-height: 1.5; color: #EDEAE2"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; margin-top: 2px; color: #E5DCC5; stroke-width: 2.4"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg>Only synced songs belong here. Files you add here are permanently deleted, and files you change are restored.</p>
+            <sc-if value="{{running}}" hint-placeholder-val="{{ false }}">
+              <div role="status" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px"><div style="display: flex; justify-content: space-between; font-size: 14px"><strong style="font-weight: 600">Checking every file…</strong><span style="font-family: 'IBM Plex Mono', monospace">121 / 182</span></div><div aria-hidden="true" style="height: 6px; border-radius: 6px; background: #252522; overflow: hidden"><div style="width: 66%; height: 100%; background: #E5DCC5"></div></div></div>
+            </sc-if>
+            <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+              <div role="status" style="margin-top: 16px; padding: 12px 14px; border-radius: 14px; background: #3A3A36">
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; color: #E5DCC5"><path d="M20 6 9 17l-5-5"></path></svg>Folder checked just now</div>
+                <div class="res"><span style="color: #D9D5CA">Songs restored</span><span style="font-family: 'IBM Plex Mono', monospace">3</span></div>
+                <div class="res" style="box-shadow: inset 0 1px 0 rgba(255,255,255,.07)"><span style="color: #D9D5CA">Extra files removed</span><span style="font-family: 'IBM Plex Mono', monospace">2</span></div>
+                <div class="res" style="box-shadow: inset 0 1px 0 rgba(255,255,255,.07)"><span style="color: #D9D5CA">Songs that still need a download</span><span style="font-family: 'IBM Plex Mono', monospace">1</span></div>
+              </div>
+            </sc-if>
+            <div style="margin-top: 16px"><button class="btn" type="button" onClick="{{check}}" disabled="{{running}}" style="background: #F26419; color: #161615">Check Songs folder</button></div>
+          </section>
+
+          <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+            <sc-if value="{{linux}}" hint-placeholder-val="{{ true }}">
+              <section class="card" aria-labelledby="h-codec" style="box-shadow: inset 0 0 0 2px #E5DCC5">
+                <p id="h-codec" class="cap">AUDIO SUPPORT ON THIS SYSTEM</p>
+                <p style="margin: 0; font-size: 15px; line-height: 1.5"><strong>AAC songs can't play yet.</strong> Your system is missing a GStreamer plugin for this format.</p>
+                <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.5; color: #D9D5CA">Install it with your package manager, then restart Song Sleeve. MP3, FLAC and WAV are ready.</p>
+              </section>
+            </sc-if>
+            <section class="card" aria-labelledby="h-priv">
+              <p id="h-priv" class="cap">PRIVACY</p>
+              <div style="display: flex; align-items: center; gap: 14px">
+                <span style="flex: 1; display: flex; flex-direction: column; gap: 3px"><span id="l-crash" style="font-size: 15px; font-weight: 600">Send crash reports</span><span style="font-size: 13px; color: #CCC8BC">Never includes song names or file paths.</span></span>
+                <button type="button" role="switch" aria-checked="{{crashChecked}}" aria-labelledby="l-crash" onClick="{{toggleCrash}}" style="position: relative; width: 52px; height: 32px; border-radius: 999px; border: 0; background: {{crashBg}}; cursor: pointer; flex: none"><span style="position: absolute; top: 4px; left: {{crashKnob}}; width: 24px; height: 24px; border-radius: 50%; background: {{crashKnobBg}}"></span></button>
+              </div>
+            </section>
+            <section class="card" aria-labelledby="h-about">
+              <p id="h-about" class="cap">ABOUT</p>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+                <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">{{appName}}</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #CCC8BC">Version [X.Y.Z]</span></span>
+                <button class="btn" type="button" style="background: #3A3A36; color: #FFFFFF">Check for updates</button>
+              </div>
+              <sc-if value="{{debUpdate}}" hint-placeholder-val="{{ false }}">
+                <p role="status" style="margin: 14px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #E5DCC5; color: #161615; font-size: 14px"><span style="flex: 1">A new version is available.</span><a href="Site.dc.html" style="color: #161615; font-weight: 700">Download the .deb</a></p>
+              </sc-if>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div style="position: sticky; bottom: 0; z-index: 5; background: #4C4C47; box-shadow: 0 -16px 30px -16px rgba(0,0,0,.6)"><dc-import name="WebPlayer" hint-size="100%,84px"></dc-import></div>
+
+  <sc-if value="{{prompt}}" hint-placeholder-val="{{ false }}">
+    <div aria-hidden="true" style="position: absolute; inset: 0; z-index: 20; background: rgba(22,22,21,.75)"></div>
+    <div style="position: absolute; inset: 0; z-index: 21; display: flex; align-items: center; justify-content: center">
+      <section role="alertdialog" aria-modal="true" aria-labelledby="cl-t" style="width: 480px; max-width: calc(100% - 32px); box-sizing: border-box; padding: 28px; border-radius: 26px; background: #4C4C47; box-shadow: 0 40px 70px -20px rgba(0,0,0,.95)">
+        <span aria-hidden="true" style="width: 52px; height: 52px; border-radius: 16px; background: #F26419; color: #161615; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg></span>
+        <h2 id="cl-t" style="margin: 16px 0 0; font-size: 21px; line-height: 1.35; font-weight: 700">Song Sleeve found 27 files that aren't synced songs. Delete them permanently?</h2>
+        <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px">
+          <button class="btn" type="button" onClick="{{closePrompt}}" style="background: transparent; color: #FFFFFF; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45)">Keep for now</button>
+          <button class="btn" type="button" onClick="{{closePrompt}}" style="background: #F26419; color: #161615">Delete</button>
+        </div>
+      </section>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"os":{"editor":"enum","options":["linuxDeb","linuxAppImage","windows"],"default":"linuxDeb"},"check":{"editor":"enum","options":["idle","running","done","largeCleanup"],"default":"done"},"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { check: null, crash: true };
+  }
+  renderVals() {
+    const st = this.state;
+    const os = this.props.os ?? 'linuxDeb';
+    const c = st.check ?? this.props.check ?? 'done';
+    const on = st.crash;
+    return {
+      path: os === 'windows' ? 'C:\\Users\\alex\\Song Sleeve' : '/home/alex/Song Sleeve',
+      linux: os !== 'windows',
+      appName: os === 'windows' ? 'Song Sleeve for Windows' : (os === 'linuxDeb' ? 'Song Sleeve for Linux (.deb)' : 'Song Sleeve for Linux (AppImage)'),
+      debUpdate: os === 'linuxDeb',
+      running: c === 'running', done: c === 'done', prompt: c === 'largeCleanup',
+      check: () => this.setState({ check: 'done' }),
+      closePrompt: () => this.setState({ check: 'idle' }),
+      crashChecked: on ? 'true' : 'false', crashBg: on ? '#E5DCC5' : '#6E6E67', crashKnob: on ? '24px' : '4px', crashKnobBg: on ? '#161615' : '#FFFFFF',
+      toggleCrash: () => this.setState({ crash: !this.state.crash })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Library</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+dc-import{display:block}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;border:0;font:600 14px 'Instrument Sans',sans-serif;cursor:pointer}
+.chip:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}
+.card{display:flex;flex-direction:column;gap:10px;padding:10px;border-radius:16px;background:#4C4C47;color:#FFFFFF;text-decoration:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 12px 20px -14px rgba(0,0,0,.75)}
+.vis{position:relative;height:112px;border-radius:10px}
+.search{width:100%;box-sizing:border-box;min-height:46px;padding:0 14px 0 42px;border-radius:14px;border:0;background:#4C4C47;color:#FFFFFF;font:400 15px 'Instrument Sans',sans-serif}
+.search::placeholder{color:#ADA99E}
+.mk{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border-radius:14px;border:0;background:transparent;color:#FFFFFF;font:600 14px 'Instrument Sans',sans-serif;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.4);cursor:pointer}
+</style>
+</helmet>
+<main style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif">
+  <header style="padding: 56px 20px 0">
+    <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 32px; letter-spacing: -0.02em">Library</h1>
+    <div style="margin-top: 14px; position: relative">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; left: 14px; top: 13px; width: 20px; height: 20px; color: #CCC8BC"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      <label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search library</label>
+      <input class="search" id="q" type="search" placeholder="Search songs, playlists and groups">
+    </div>
+    <div role="group" aria-label="Show item types" style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap">
+      <sc-for list="{{chips}}" as="c" hint-placeholder-count="3">
+        <button class="chip" type="button" aria-pressed="{{c.pressed}}" onClick="{{c.toggle}}" style="background: {{c.bg}}; color: {{c.fg}}; box-shadow: {{c.ring}}">
+          <sc-if value="{{c.on}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; stroke-width: 2.6"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+          {{c.label}}
+        </button>
+      </sc-for>
+    </div>
+    <sc-if value="{{lastOne}}" hint-placeholder-val="{{ false }}">
+      <p role="status" style="margin: 8px 0 0; font-size: 12px; color: #E5DCC5">At least one type stays on.</p>
+    </sc-if>
+    <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+      <button class="mk" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px"><path d="M12 5v14M5 12h14"></path></svg>Create playlist</button>
+      <button class="mk" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px"><path d="M12 5v14M5 12h14"></path></svg>Create group</button>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 20px 200px">
+    <sc-for list="{{cards}}" as="c" hint-placeholder-count="6">
+      <a class="card" href="{{c.href}}">
+        <sc-if value="{{c.isSong}}" hint-placeholder-val="{{ true }}">
+          <span class="vis" style="background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center">
+            <span style="position: absolute; inset: 8px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08)"></span>
+            <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 32px; height: 32px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            <sc-if value="{{c.local}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; left: 8px; bottom: 8px; padding: 2px 7px; border-radius: 6px; background: #2D2D2A; color: #EDEAE2; font-size: 11px; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(255,255,255,.35)">On this device</span></sc-if>
+          </span>
+        </sc-if>
+        <sc-if value="{{c.isPlaylist}}" hint-placeholder-val="{{ false }}">
+          <span class="vis" aria-hidden="true">
+            <span style="position: absolute; left: 22px; right: 0; top: 0; bottom: 18px; border-radius: 10px; background: #5E5E58"></span>
+            <span style="position: absolute; left: 0; right: 22px; top: 18px; bottom: 0; border-radius: 10px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1)"><svg class="i" viewBox="0 0 24 24" style="width: 28px; height: 28px"><path d="M21 15V6"></path><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M12 12H3"></path><path d="M16 6H3"></path><path d="M12 18H3"></path></svg></span>
+          </span>
+        </sc-if>
+        <sc-if value="{{c.isGroup}}" hint-placeholder-val="{{ false }}">
+          <span class="vis" aria-hidden="true">
+            <span style="position: absolute; left: 34px; top: 2px; width: 84px; height: 84px; border-radius: 10px; background: #6E6E67; transform: rotate(12deg)"></span>
+            <span style="position: absolute; left: 22px; top: 8px; width: 84px; height: 84px; border-radius: 10px; background: #5E5E58; transform: rotate(5deg)"></span>
+            <span style="position: absolute; left: 8px; top: 20px; width: 90px; height: 90px; border-radius: 10px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1)"><svg class="i" viewBox="0 0 24 24" style="width: 28px; height: 28px"><path d="m12 2 10 5-10 5L2 7z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg></span>
+          </span>
+        </sc-if>
+        <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 0 2px 2px">
+          <span style="font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</span>
+          <span style="font-size: 12px; color: #CCC8BC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><strong style="font-weight: 700; color: #FFFFFF; letter-spacing: .04em; font-size: 11px; text-transform: uppercase">{{c.kind}}</strong> · {{c.meta}}</span>
+        </span>
+      </a>
+    </sc-for>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0">
+    <dc-import name="MiniPlayer" hint-size="390px,80px"></dc-import>
+    <dc-import name="TabBar" active="library" hint-size="390px,88px"></dc-import>
+  </div>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { song: true, playlist: true, group: true, warn: false };
+  }
+  renderVals() {
+    const st = this.state;
+    const all = [
+      { type: 'group', name: 'Travel', meta: '3 playlists', href: 'Group.dc.html' },
+      { type: 'playlist', name: 'Sunday Drive', meta: '14 songs', href: 'Playlist.dc.html' },
+      { type: 'song', name: 'Rehearsal take 3', meta: 'No artist', href: 'Playing.dc.html', local: true },
+      { type: 'song', name: 'Copper Sky', meta: 'The Low Tides', href: 'Playing.dc.html' },
+      { type: 'playlist', name: 'Late Night', meta: '22 songs', href: 'Playlist.dc.html' },
+      { type: 'group', name: 'Moods', meta: '4 playlists', href: 'Group.dc.html' }
+    ];
+    const kinds = { song: 'Song', playlist: 'Playlist', group: 'Group' };
+    const onCount = ['song', 'playlist', 'group'].filter((k) => st[k]).length;
+    const chip = (key, label) => {
+      const on = st[key];
+      return {
+        label, on,
+        pressed: on ? 'true' : 'false',
+        bg: on ? '#E5DCC5' : 'transparent',
+        fg: on ? '#161615' : '#FFFFFF',
+        ring: on ? 'none' : 'inset 0 0 0 1.5px rgba(255,255,255,.55)',
+        toggle: () => {
+          if (on && onCount === 1) { this.setState({ warn: true }); return; }
+          this.setState({ [key]: !on, warn: false });
+        }
+      };
+    };
+    return {
+      chips: [chip('song', 'Songs'), chip('playlist', 'Playlists'), chip('group', 'Groups')],
+      lastOne: st.warn,
+      cards: all.filter((c) => st[c.type]).map((c) => ({ ...c, local: !!c.local, kind: kinds[c.type], isSong: c.type === 'song', isPlaylist: c.type === 'playlist', isGroup: c.type === 'group' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Start · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:3px solid #E5DCC5;outline-offset:3px}
+.btn{display:flex;align-items:center;justify-content:center;min-height:56px;padding:0 30px;border-radius:16px;font:700 16px 'Instrument Sans',sans-serif;text-decoration:none}
+.lang{min-height:38px;padding:0 14px;border:0;border-radius:10px;font:600 14px 'Instrument Sans',sans-serif;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; padding: 28px clamp(16px, 5vw, 72px) 48px">
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; background: #4C4C47; position: relative; overflow: hidden; display: block"><span style="position: absolute; right: -9px; top: 6px; width: 20px; height: 20px; border-radius: 50%; background: #F26419; box-shadow: 0 0 0 5px #161615"></span></span>
+      <span style="font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 20px; letter-spacing: -0.02em">Song Sleeve</span>
+    </div>
+    <div role="group" aria-label="Language" style="display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 13px; background: #3A3A36">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin: 0 4px 0 8px; color: #CCC8BC"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18"></path><path d="M12 3a14 14 0 0 0 0 18"></path></svg>
+      <button class="lang" type="button" aria-pressed="{{enP}}" onClick="{{toEn}}" style="background: {{enBg}}; color: {{enFg}}">English</button>
+      <button class="lang" type="button" lang="pt-BR" aria-pressed="{{ptP}}" onClick="{{toPt}}" style="background: {{ptBg}}; color: {{ptFg}}">Português (Brasil)</button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 48px 80px; margin-top: 32px">
+    <div aria-hidden="true" style="position: relative; width: min(500px, 100%); aspect-ratio: 52 / 44">
+      <div style="position: absolute; left: 34%; top: 8%; width: 62%; aspect-ratio: 1 / 1; border-radius: 50%; background: repeating-radial-gradient(circle at center, #161615 0 2px, #222220 2px 4px); box-shadow: 0 30px 50px -20px rgba(0,0,0,.8); display: flex; align-items: center; justify-content: center"><div style="width: 36%; aspect-ratio: 1 / 1; border-radius: 50%; background: #F26419"></div></div>
+      <div style="position: absolute; left: 2%; top: 4%; width: 62%; aspect-ratio: 1 / 1.06; border-radius: 18px; background: #4C4C47; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 40px 60px -24px rgba(0,0,0,.85); transform: rotate(-4deg); display: flex; align-items: center; justify-content: center">
+        <div style="position: absolute; inset: 18px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12)"></div>
+        <div style="width: 34%; aspect-ratio: 1 / 1; border-radius: 50%; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 46%; height: 46%"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>
+      </div>
+    </div>
+    <div style="flex: 0 1 460px; min-width: 0">
+      <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: clamp(40px, 5vw, 60px); line-height: 1; letter-spacing: -0.02em">Song Sleeve</h1>
+      <p style="margin: 18px 0 0; font-size: 19px; line-height: 1.5; color: #EDEAE2">{{tagline}}</p>
+      <div style="margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px">
+        <a class="btn" href="WebAuth.dc.html" style="background: #F26419; color: #161615">{{login}}</a>
+        <a class="btn" href="WebAuth.dc.html" style="color: #FFFFFF; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.6)">{{register}}</a>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { lang: 'en' };
+  }
+  renderVals() {
+    const pt = this.state.lang === 'pt';
+    const on = { bg: '#E5DCC5', fg: '#161615' };
+    const off = { bg: 'transparent', fg: '#FFFFFF' };
+    return {
+      enBg: pt ? off.bg : on.bg, enFg: pt ? off.fg : on.fg, enP: pt ? 'false' : 'true',
+      ptBg: pt ? on.bg : off.bg, ptFg: pt ? on.fg : off.fg, ptP: pt ? 'true' : 'false',
+      toEn: () => this.setState({ lang: 'en' }),
+      toPt: () => this.setState({ lang: 'pt' }),
+      tagline: pt ? 'Toque e organize as músicas que são suas. Os arquivos ficam onde estão no seu computador.' : 'Play and organize the music files you own. They stay right where they are on your computer.',
+      login: pt ? 'Entrar' : 'Log in',
+      register: pt ? 'Criar conta' : 'Register'
+    };
+  }
+}
+</script>
+</body>
+</html>

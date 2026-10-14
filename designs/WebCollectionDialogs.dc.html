@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Playlist, group and artist dialogs · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.dlg{position:relative;width:540px;max-width:calc(100% - 32px);box-sizing:border-box;padding:28px;border-radius:26px;background:#4C4C47;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 40px 70px -20px rgba(0,0,0,.95)}
+.x{position:absolute;right:16px;top:16px;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#3A3A36;color:#FFFFFF;text-decoration:none}
+.h{margin:0;font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:800;font-size:26px;letter-spacing:-0.015em;padding-right:52px}
+.in{width:100%;box-sizing:border-box;min-height:52px;padding:0 14px;border-radius:14px;border:1.5px solid #E5DCC5;background:#3A3A36;color:#FFFFFF;font:400 16px 'Instrument Sans',sans-serif;box-shadow:0 0 0 3px rgba(229,220,197,.2);outline:none}
+.p{display:flex;align-items:center;justify-content:center;min-height:52px;padding:0 22px;border-radius:16px;border:0;background:#F26419;color:#161615;font:700 16px 'Instrument Sans',sans-serif;text-decoration:none;cursor:pointer}
+.s{display:flex;align-items:center;justify-content:center;min-height:52px;padding:0 22px;border-radius:16px;border:0;background:transparent;color:#FFFFFF;font:600 15px 'Instrument Sans',sans-serif;text-decoration:none;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.4);cursor:pointer}
+.opt{display:flex;align-items:center;gap:12px;width:100%;min-height:54px;padding:0 10px;border:0;border-radius:12px;background:transparent;color:#FFFFFF;font:500 15px 'Instrument Sans',sans-serif;text-align:left;cursor:pointer}
+.opt:hover{background:#3A3A36}
+.opt:disabled{cursor:default}
+.li{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.45;color:#EDEAE2}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; background: #2D2D2A; font-family: 'Instrument Sans', sans-serif; color: #FFFFFF">
+  <div aria-hidden="true" style="position: absolute; inset: 0"><dc-import name="WebPlaylist" hint-size="1440px,900px"></dc-import></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(22,22,21,.74)"></div>
+  <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center">
+
+    <sc-if value="{{isName}}" hint-placeholder-val="{{ true }}">
+      <section class="dlg" role="dialog" aria-modal="true" aria-labelledby="t1">
+        <a class="x" href="WebLibrary.dc.html" aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></a>
+        <h1 id="t1" class="h">{{nameTitle}}</h1>
+        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; justify-content: space-between"><label for="nm" style="font-size: 13px; font-weight: 600">Name</label><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #CCC8BC">{{counter}}</span></div>
+          <input class="in" id="nm" type="text" value="{{nameValue}}" placeholder="{{namePh}}" readonly>
+        </div>
+        <p style="margin: 12px 0 0; font-size: 13px; color: #CCC8BC">Needs a connection. Your other devices show it right after.</p>
+        <div style="margin-top: 26px; display: flex; justify-content: flex-end; gap: 10px"><a class="s" href="WebLibrary.dc.html">Cancel</a><a class="p" href="WebPlaylist.dc.html">{{nameAction}}</a></div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isPicker}}" hint-placeholder-val="{{ false }}">
+      <section class="dlg" role="dialog" aria-modal="true" aria-labelledby="t2" style="width: 580px">
+        <a class="x" href="WebPlaylist.dc.html" aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></a>
+        <h1 id="t2" class="h">{{pickTitle}}</h1>
+        <p style="margin: 6px 0 0; font-size: 14px; color: #D9D5CA">{{pickSub}}</p>
+        <div style="margin-top: 16px; position: relative">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; left: 14px; top: 15px; width: 20px; height: 20px; color: #CCC8BC"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search</label>
+          <input id="q" type="search" placeholder="Search" style="width: 100%; box-sizing: border-box; min-height: 50px; padding: 0 14px 0 42px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,.18); background: #3A3A36; color: #FFFFFF; font: 400 16px 'Instrument Sans', sans-serif">
+        </div>
+        <ul style="list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 330px; overflow: auto">
+          <sc-for list="{{items}}" as="o" hint-placeholder-count="5">
+            <li><button class="opt" type="button" role="checkbox" aria-checked="{{o.checked}}" disabled="{{o.already}}" onClick="{{o.toggle}}">
+              <span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 10px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; flex: none"><sc-if value="{{o.isSong}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></sc-if><sc-if value="{{o.isPl}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="M21 15V6"></path><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M12 12H3"></path><path d="M16 6H3"></path><path d="M12 18H3"></path></svg></sc-if><sc-if value="{{o.isGroup}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="m12 2 10 5-10 5L2 7z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg></sc-if></span>
+              <span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="color: {{o.fg}}">{{o.name}}</span><span style="font-size: 12px; color: #CCC8BC">{{o.meta}}</span></span>
+              <sc-if value="{{o.already}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #CCC8BC">{{alreadyLabel}}</span></sc-if>
+              <sc-if value="{{o.canPick}}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: {{o.boxBg}}; box-shadow: {{o.boxRing}}; color: #161615"><sc-if value="{{o.on}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px; stroke-width: 3"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span></sc-if>
+            </button></li>
+          </sc-for>
+        </ul>
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px"><a class="s" href="WebPlaylist.dc.html">Cancel</a><a class="p" href="WebPlaylist.dc.html">{{addLabel}}</a></div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isDelete}}" hint-placeholder-val="{{ false }}">
+      <section class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="t3">
+        <span aria-hidden="true" style="width: 56px; height: 56px; border-radius: 18px; background: #F26419; color: #161615; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 26px; height: 26px"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg></span>
+        <h1 id="t3" class="h" style="margin-top: 16px">{{delTitle}}</h1>
+        <ul style="list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+          <sc-for list="{{delLines}}" as="l" hint-placeholder-count="2">
+            <li class="li">
+              <sc-if value="{{l.keep}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-top: 3px; color: #E5DCC5"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+              <sc-if value="{{l.gone}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-top: 3px; color: #F26419"><path d="M18 6 6 18M6 6l12 12"></path></svg></sc-if>
+              <span>{{l.text}}</span>
+            </li>
+          </sc-for>
+        </ul>
+        <div style="margin-top: 26px; display: flex; justify-content: flex-end; gap: 10px"><a class="s" href="WebPlaylist.dc.html">Cancel</a><a class="p" href="WebLibrary.dc.html">{{delLabel}}</a></div>
+      </section>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dialog":{"editor":"enum","options":["createPlaylist","createGroup","renamePlaylist","renameArtist","addSongsToPlaylist","addPlaylistsToGroup","addToGroups","deletePlaylist","deletePlaylistFromGroup","deleteGroup","deleteArtist"],"default":"addSongsToPlaylist"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: { 'Night Market': true, 'Driftwood': true, 'Kitchen Radio': true, 'Moods': true, 'Travel': true } };
+  }
+  renderVals() {
+    const d = this.props.dialog ?? 'addSongsToPlaylist';
+    const st = this.state;
+    const nameCfg = {
+      createPlaylist: ['Create playlist', '', 'New playlist name', 'Create', '0 / 100'],
+      createGroup: ['Create group', '', 'New group name', 'Create', '0 / 100'],
+      renamePlaylist: ['Rename playlist', 'Sunday Drive', '', 'Save', '12 / 100'],
+      renameArtist: ['Rename artist', 'Marina Okafor', '', 'Save', '13 / 200']
+    }[d];
+    const pickers = {
+      addSongsToPlaylist: { title: 'Add songs to playlist', sub: 'Sunday Drive', already: 'In playlist', list: [['Harbor Lights', 'Marina Okafor', true], ['Night Market', 'Ines Caldera'], ['Driftwood', 'The Low Tides · on this computer only'], ['Undertow', 'Marina Okafor'], ['Lanterns', 'Ines Caldera'], ['Two Rivers', 'Ines Caldera']], unit: 'song' },
+      addPlaylistsToGroup: { title: 'Add playlists', sub: 'Travel', already: 'In group', list: [['Sunday Drive', '14 songs', true], ['Late Night', '22 songs'], ['Focus', '31 songs'], ['Kitchen Radio', '18 songs']], unit: 'playlist' },
+      addToGroups: { title: 'Add to groups', sub: 'Sunday Drive can be in several groups. Nothing is copied.', already: 'Already in', list: [['Moods', '4 playlists', true], ['Travel', '3 playlists', true], ['Work', '2 playlists']], unit: 'group' }
+    }[d];
+    const dels = {
+      deletePlaylist: ['Delete playlist “Sunday Drive”?', 'Delete playlist', [['The playlist and its song order are removed, and it leaves Moods and Travel.', 0], ['All 14 songs stay in your library and other playlists.', 1]]],
+      deletePlaylistFromGroup: ['Delete playlist “Road Trip”?', 'Delete playlist', [['It leaves every group it is in, not only Travel.', 0], ['Its songs stay in your library. To only take it out of Travel, use Remove from group.', 1]]],
+      deleteGroup: ['Delete group “Travel”?', 'Delete group', [['The group is removed.', 0], ['Its 3 playlists stay, with their songs.', 1]]],
+      deleteArtist: ['Delete artist “Vera Lindqvist”?', 'Delete artist', [['No song uses this artist any more, so only the name is removed.', 0], ['Songs on your devices that still show this name keep it.', 1]]]
+    }[d];
+    const items = pickers ? pickers.list.map(([name, meta, already]) => {
+      const on = !!st.picked[name];
+      return {
+        name, meta, on, isSong: pickers.unit === 'song', isPl: pickers.unit === 'playlist', isGroup: pickers.unit === 'group',
+        already: !!already, canPick: !already,
+        fg: already ? '#ADA99E' : '#FFFFFF',
+        checked: already || on ? 'true' : 'false',
+        boxBg: on ? '#E5DCC5' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 2px #CCC8BC',
+        toggle: () => this.setState({ picked: { ...this.state.picked, [name]: !on } })
+      };
+    }) : [];
+    const n = items.filter((o) => o.on && o.canPick).length;
+    return {
+      isName: !!nameCfg, isPicker: !!pickers, isDelete: !!dels,
+      nameTitle: nameCfg ? nameCfg[0] : '', nameValue: nameCfg ? nameCfg[1] : '', namePh: nameCfg ? nameCfg[2] : '', nameAction: nameCfg ? nameCfg[3] : '', counter: nameCfg ? nameCfg[4] : '',
+      pickTitle: pickers ? pickers.title : '', pickSub: pickers ? pickers.sub : '', alreadyLabel: pickers ? pickers.already : '',
+      items,
+      addLabel: n ? 'Add ' + n : 'Add',
+      delTitle: dels ? dels[0] : '', delLabel: dels ? dels[1] : '',
+      delLines: dels ? dels[2].map(([text, keep]) => ({ text, keep: !!keep, gone: !keep })) : []
+    };
+  }
+}
+</script>
+</body>
+</html>

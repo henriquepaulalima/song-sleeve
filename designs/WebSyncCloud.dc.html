@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sync scope · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.tile{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:14px;background:#3A3A36}
+.tn{margin:0;font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;line-height:1}
+.tl{order:2;font-size:12px;color:#CCC8BC;line-height:1.35}
+.srow{display:flex;align-items:center;gap:12px;min-height:54px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.07)}
+.st{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;font-size:12px;font-weight:700;flex:none}
+</style>
+</helmet>
+<div style="width: 1440px; height: 960px; position: relative; overflow: hidden; background: #2D2D2A; font-family: 'Instrument Sans', sans-serif; color: #FFFFFF">
+  <div aria-hidden="true" style="position: absolute; inset: 0"><dc-import name="WebPlaylist" hint-size="1440px,960px"></dc-import></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(22,22,21,.74)"></div>
+  <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center">
+    <section role="dialog" aria-modal="true" aria-labelledby="t" style="position: relative; width: 980px; box-sizing: border-box; padding: 30px 32px; border-radius: 28px; background: #4C4C47; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 50px 80px -24px rgba(0,0,0,.95); display: flex; flex-wrap: wrap; gap: 28px">
+      <a href="WebPlaylist.dc.html" aria-label="Close" style="position: absolute; right: 18px; top: 18px; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #3A3A36; color: #FFFFFF"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></a>
+      <div style="flex: 1 1 380px; display: flex; flex-direction: column">
+        <span style="align-self: flex-start; padding: 5px 11px; border-radius: 999px; background: #3A3A36; font-size: 13px; font-weight: 600">{{scopeName}}</span>
+        <h1 id="t" style="margin: 12px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 30px; letter-spacing: -0.02em">{{title}}</h1>
+        <sc-if value="{{confirm}}" hint-placeholder-val="{{ true }}">
+          <p style="margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: #EDEAE2">Uploads the songs here that are only on this computer. After that, each of your devices syncs its own songs that join this {{scopeWord}}.</p>
+          <dl style="margin: 18px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+            <div class="tile"><dt class="tl">already synced</dt><dd class="tn">9</dd></div>
+            <div class="tile" style="box-shadow: inset 0 0 0 1.5px #E5DCC5"><dt class="tl">to upload · about 86 MB</dt><dd class="tn" style="color: #E5DCC5">4</dd></div>
+            <div class="tile"><dt class="tl">need attention</dt><dd class="tn">1</dd></div>
+          </dl>
+        </sc-if>
+        <sc-if value="{{enabled}}" hint-placeholder-val="{{ false }}">
+          <div role="status" style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: #3A3A36">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; color: #E5DCC5"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path><path d="m9 14 2 2 4-4"></path></svg>Automatic sync is on</div>
+            <div style="display: flex; justify-content: space-between; font-size: 14px; color: #EDEAE2"><span>11 of 14 synced</span><span style="font-family: 'IBM Plex Mono', monospace">2 syncing · 1 queued</span></div>
+            <div aria-hidden="true" style="height: 6px; border-radius: 6px; background: #252522; overflow: hidden"><div style="width: 78%; height: 100%; background: #E5DCC5"></div></div>
+            <p style="margin: 0; font-size: 12px; color: #CCC8BC">Up to three songs upload at a time.</p>
+          </div>
+        </sc-if>
+        <p style="margin: 14px 0 0; display: flex; gap: 8px; font-size: 13px; line-height: 1.45; color: #CCC8BC"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 15px; height: 15px; margin-top: 2px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01"></path><path d="M11 12h1v4h1"></path></svg>Songs whose sync failed aren't included. Use Retry failed syncs.</p>
+        <div style="margin-top: auto; padding-top: 20px; display: flex; gap: 10px">
+          <sc-if value="{{confirm}}" hint-placeholder-val="{{ true }}">
+            <a href="WebPlaylist.dc.html" style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 16px; color: #FFFFFF; font-weight: 600; text-decoration: none; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4)">Cancel</a>
+            <button type="button" onClick="{{start}}" style="flex: 1.4; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; border-radius: 16px; border: 0; background: #F26419; color: #161615; font: 700 16px 'Instrument Sans', sans-serif; cursor: pointer"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="M12 13v8"></path><path d="m8 17 4-4 4 4"></path><path d="M20.4 15.6A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.3"></path></svg>Sync to cloud</button>
+          </sc-if>
+          <sc-if value="{{enabled}}" hint-placeholder-val="{{ false }}">
+            <button type="button" onClick="{{pause}}" style="flex: 1.4; min-height: 52px; border-radius: 16px; border: 0; background: transparent; color: #FFFFFF; font: 600 15px 'Instrument Sans', sans-serif; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45); cursor: pointer">Pause automatic sync</button>
+            <a href="WebPlaylist.dc.html" style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 16px; background: #3A3A36; color: #FFFFFF; font-weight: 600; text-decoration: none">Close</a>
+          </sc-if>
+        </div>
+        <sc-if value="{{enabled}}" hint-placeholder-val="{{ false }}"><p style="margin: 8px 0 0; font-size: 12px; color: #CCC8BC">Pausing keeps songs that are already synced.</p></sc-if>
+      </div>
+
+      <div style="flex: 1 1 420px; min-width: 0; padding-top: 44px">
+        <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .06em; color: #D9D5CA">SONGS ONLY ON THIS COMPUTER</h2>
+        <ul style="list-style: none; margin: 0; padding: 0">
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+            <li class="srow">
+              <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 8px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; flex: none"><svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span><span style="font-size: 12px; color: #CCC8BC">{{r.sub}}</span></span>
+              <sc-if value="{{r.isAttn}}" hint-placeholder-val="{{ false }}"><a href="WebUpdateSource.dc.html" class="st" style="background: #E5DCC5; color: #161615; text-decoration: none; min-height: 34px">Needs attention · Relink</a></sc-if>
+              <sc-if value="{{r.isOk}}" hint-placeholder-val="{{ true }}"><span class="st" style="background: {{r.bg}}; color: {{r.fg}}; box-shadow: {{r.ring}}">{{r.label}}</span></sc-if>
+            </li>
+          </sc-for>
+        </ul>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["confirm","enabled"],"default":"confirm"},"scope":{"editor":"enum","options":["playlist","group","library"],"default":"playlist"},"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { s: null };
+  }
+  renderVals() {
+    const s = this.state.s ?? this.props.state ?? 'confirm';
+    const scope = this.props.scope ?? 'playlist';
+    const en = s === 'enabled';
+    const names = { playlist: ['Playlist · Sunday Drive', 'playlist'], group: ['Group · Travel', 'group (any of its playlists)'], library: ['Whole library', 'library'] };
+    const K = { up: ['transparent', '#EDEAE2', 'inset 0 0 0 1px rgba(255,255,255,.35)'], prog: ['#3A3A36', '#E5DCC5', 'none'] };
+    const raw = [
+      { name: 'Paper Moons', sub: 'Marina Okafor · 9.6 MB', e: 'Syncing… 64%', ek: 'prog' },
+      { name: 'Rehearsal take 3', sub: '2.6 MB', e: 'Syncing… 12%', ek: 'prog' },
+      { name: 'Driftwood', sub: 'The Low Tides · 41.2 MB', e: 'Queued', ek: 'prog' },
+      { name: 'Two Rivers', sub: 'Ines Caldera · 32.4 MB', e: 'Synced', ek: 'up' },
+      { name: 'Undertow', sub: 'Original file not found', attn: true }
+    ];
+    return {
+      confirm: !en, enabled: en,
+      title: en ? 'Synced to cloud' : 'Sync to cloud',
+      scopeName: names[scope][0], scopeWord: names[scope][1],
+      start: () => this.setState({ s: 'enabled' }),
+      pause: () => this.setState({ s: 'confirm' }),
+      rows: raw.map((r) => {
+        const k = K[en ? r.ek : 'up'] ?? K.up;
+        return { ...r, isAttn: !!r.attn, isOk: !r.attn, label: en ? r.e : 'To upload', bg: k[0], fg: k[1], ring: k[2] };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

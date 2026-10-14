@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Playlist · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.rb{width:48px;height:48px;border-radius:50%;border:0;background:#4C4C47;color:#FFFFFF;display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.1);flex:none}
+.th{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#D9D5CA}
+.mi{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;min-height:46px;padding:0 14px;border:0;border-radius:10px;background:none;color:#FFFFFF;font:500 15px 'Instrument Sans',sans-serif;text-align:left;text-decoration:none;cursor:pointer}
+.mi:hover{background:#4C4C47}
+.gchip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:999px;background:#4C4C47;color:#FFFFFF;font-size:13px;text-decoration:none}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif">
+  <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+    <div style="flex: 1 1 240px; max-width: 100%; display: flex; background: #4C4C47; box-shadow: 1px 0 0 rgba(255,255,255,.06)"><dc-import name="WebSidebar" active="library" current="Sunday Drive" hint-size="100%,900px"></dc-import></div>
+    <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px clamp(16px, 3vw, 40px) 48px">
+      <div style="max-width: 1120px; margin: 0 auto">
+        <nav aria-label="Breadcrumb" style="font-size: 13px; color: #D9D5CA"><a href="WebLibrary.dc.html" style="color: #FFFFFF">Library</a> <span aria-hidden="true">/</span> Playlists</nav>
+        <header style="margin-top: 16px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px">
+          <span aria-hidden="true" style="position: relative; width: 160px; height: 160px; flex: none">
+            <span style="position: absolute; left: 22px; top: 0; width: 138px; height: 138px; border-radius: 16px; background: #5E5E58"></span>
+            <span style="position: absolute; left: 0; top: 22px; width: 138px; height: 138px; border-radius: 16px; background: #4C4C47; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 24px 36px -18px rgba(0,0,0,.85)"><span style="position: absolute; inset: 10px; border-radius: 9px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12)"></span><svg class="i" viewBox="0 0 24 24" style="width: 44px; height: 44px; stroke-width: 1.8"><path d="M21 15V6"></path><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M12 12H3"></path><path d="M16 6H3"></path><path d="M12 18H3"></path></svg></span>
+          </span>
+          <div style="flex: 1 1 320px; min-width: 0">
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .16em; color: #D9D5CA">PLAYLIST</div>
+            <h1 style="margin: 6px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 44px; letter-spacing: -0.02em; line-height: 1.05">Sunday Drive</h1>
+            <div style="margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; color: #D9D5CA">
+              <span>14 songs · 2 only on this computer</span><span aria-hidden="true">·</span><span>In</span>
+              <a class="gchip" href="WebGroup.dc.html">Moods</a><a class="gchip" href="WebGroup.dc.html">Travel</a>
+            </div>
+          </div>
+        </header>
+
+        <div style="margin-top: 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <a href="WebPlaying.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 22px 0 18px; border-radius: 16px; background: #F26419; color: #161615; font-weight: 700; font-size: 15px; text-decoration: none"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg>Play</a>
+          <a class="rb" href="WebPlaying.dc.html" aria-label="Shuffle play"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="M16 3h5v5"></path><path d="M4 20 21 3"></path><path d="M21 16v5h-5"></path><path d="m15 15 6 6"></path><path d="M4 4l5 5"></path></svg></a>
+          <a href="WebSyncCloud.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 999px; background: #4C4C47; color: #FFFFFF; font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: inset 0 0 0 1.5px #E5DCC5"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; color: #E5DCC5"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path><path d="m9 14 2 2 4-4"></path></svg>Auto-sync on · 1 syncing</a>
+          <a href="WebCollectionDialogs.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 12px; color: #FFFFFF; font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px"><path d="M12 5v14M5 12h14"></path></svg>Add songs to playlist</a>
+          <div style="position: relative">
+            <button class="rb" type="button" onClick="{{toggleMenu}}" aria-haspopup="menu" aria-expanded="{{menuExp}}" aria-label="Playlist options" style="background: {{menuBg}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle class="f" cx="5" cy="12" r="1.7"></circle><circle class="f" cx="12" cy="12" r="1.7"></circle><circle class="f" cx="19" cy="12" r="1.7"></circle></svg></button>
+            <sc-if value="{{menu}}" hint-placeholder-val="{{ true }}">
+              <div role="menu" aria-label="Playlist options" style="position: absolute; left: 0; top: 56px; z-index: 10; width: 260px; padding: 6px; border-radius: 16px; background: #3A3A36; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 24px 40px -14px rgba(0,0,0,.9)">
+                <a class="mi" role="menuitem" href="WebCollectionDialogs.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; color: #E5DCC5"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>Rename playlist</a>
+                <a class="mi" role="menuitem" href="WebCollectionDialogs.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; color: #E5DCC5"><path d="m12 2 10 5-10 5L2 7z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg>Add to groups</a>
+                <div aria-hidden="true" style="height: 1px; margin: 4px 10px; background: rgba(255,255,255,.08)"></div>
+                <a class="mi" role="menuitem" href="WebCollectionDialogs.dc.html" style="align-items: flex-start; padding-top: 10px; padding-bottom: 10px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; color: #F26419; margin-top: 1px"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg><span style="display: flex; flex-direction: column; gap: 2px"><span>Delete playlist</span><span style="font-size: 12px; color: #CCC8BC">The songs stay</span></span></a>
+              </div>
+            </sc-if>
+          </div>
+          <span style="margin-left: auto; font-size: 13px; color: #D9D5CA">Drag to reorder, or focus a handle and use ↑ ↓</span>
+        </div>
+
+        <div style="margin-top: 22px; overflow-x: auto">
+          <div style="min-width: 820px; display: flex; flex-direction: column; gap: 6px">
+            <div aria-hidden="true" style="display: grid; grid-template-columns: 44px minmax(0,2.2fr) minmax(0,1.3fr) 230px 56px 44px; column-gap: 12px; padding: 0 6px 4px"><span></span><span class="th">TITLE</span><span class="th">ARTIST</span><span class="th">STATUS</span><span class="th" style="text-align: right">TIME</span><span></span></div>
+            <ol aria-label="Songs in Sunday Drive, playlist order" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+              <sc-for list="{{songs}}" as="s" hint-placeholder-count="7">
+                <sc-if value="{{s.dropBefore}}" hint-placeholder-val="{{ false }}">
+                  <li aria-hidden="true" style="position: relative; height: 0"><span style="position: absolute; left: 44px; right: 0; top: -4px; height: 3px; border-radius: 3px; background: #E5DCC5"></span><span style="position: absolute; left: 36px; top: -9px; width: 13px; height: 13px; border-radius: 50%; background: #E5DCC5"></span></li>
+                </sc-if>
+                <li><dc-import name="WebSongRow" item="{{s}}" hint-size="100%,60px"></dc-import></li>
+              </sc-for>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div style="position: sticky; bottom: 0; z-index: 5; background: #4C4C47; box-shadow: 0 -16px 30px -16px rgba(0,0,0,.6)"><dc-import name="WebPlayer" hint-size="100%,84px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1060}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { menu: true };
+  }
+  renderVals() {
+    const m = this.state.menu;
+    return {
+      menu: m,
+      menuExp: m ? 'true' : 'false',
+      menuBg: m ? '#3A3A36' : '#4C4C47',
+      toggleMenu: () => this.setState({ menu: !this.state.menu }),
+      songs: [
+        { name: 'Harbor Lights', artist: 'Marina Okafor', dur: '3:52', status: 'synced', playing: true },
+        { name: 'Saltwater Hymn', artist: 'Juniper Hall', dur: '4:45', status: 'synced' },
+        { name: 'Paper Moons', artist: 'Marina Okafor', dur: '3:37', status: 'syncing', pct: 18, dropBefore: true },
+        { name: 'Rehearsal take 3', artist: '', dur: '2:41', status: 'queued' },
+        { name: 'Copper Sky', artist: 'The Low Tides', dur: '4:07', status: 'downloading', pct: 55 },
+        { name: 'Glass Garden', artist: 'Northbound Static', dur: '3:11', status: 'synced' },
+        { name: 'Morning Ferry', artist: 'The Low Tides', dur: '3:58', status: 'waiting' }
+      ].map((s) => ({ ...s, dropBefore: !!s.dropBefore }))
+    };
+  }
+}
+</script>
+</body>
+</html>

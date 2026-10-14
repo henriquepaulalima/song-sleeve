@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shared screen states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.pan{position:relative;display:flex;flex-direction:column;height:396px;box-sizing:border-box;padding:18px;border-radius:20px;background:#2D2D2A;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);overflow:hidden}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:#CCC8BC;margin:0 0 12px}
+.sk{border-radius:12px;background:#3A3A36}
+.mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px}
+.ttl{margin:0;font-size:18px;font-weight:700}
+.sub{margin:0;font-size:14px;line-height:1.5;color:#D9D5CA;max-width:260px}
+.p{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:14px;border:0;background:#F26419;color:#161615;font:700 14px 'Instrument Sans',sans-serif;text-decoration:none;cursor:pointer}
+.s{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:14px;border:0;background:transparent;color:#FFFFFF;font:600 14px 'Instrument Sans',sans-serif;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45);cursor:pointer}
+.msg{display:flex;gap:8px;padding:12px;border-radius:12px;font-size:13px;line-height:1.45}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 32px; background: #4C4C47; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, 396px); gap: 22px">
+
+  <section class="pan" aria-label="Loading">
+    <p class="tag">LOADING</p>
+    <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 10px">
+      <div class="sk" style="width: 55%; height: 26px"></div>
+      <div class="sk" style="width: 35%; height: 14px; margin-bottom: 8px"></div>
+      <div class="sk" style="height: 56px"></div><div class="sk" style="height: 56px; opacity: .8"></div><div class="sk" style="height: 56px; opacity: .6"></div><div class="sk" style="height: 56px; opacity: .4"></div>
+    </div>
+    <p role="status" style="margin: auto 0 0; font-size: 13px; color: #CCC8BC">Skeleton rows. On the web, shown while the catalog loads after a reload.</p>
+  </section>
+
+  <section class="pan" aria-label="Empty library">
+    <p class="tag">EMPTY · LIBRARY</p>
+    <div class="mid">
+      <span aria-hidden="true" style="width: 64px; height: 64px; border-radius: 16px; background: #4C4C47; color: #E5DCC5; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+      <p class="ttl">No songs yet</p>
+      <p class="sub">Add music files from this computer to start your library.</p>
+      <a class="p" href="WebAddSongs.dc.html">Add songs</a>
+    </div>
+  </section>
+
+  <section class="pan" aria-label="Empty playlist and group">
+    <p class="tag">EMPTY · PLAYLIST / GROUP</p>
+    <div class="mid" style="gap: 8px">
+      <p class="ttl">This playlist has no songs</p>
+      <a class="p" href="WebCollectionDialogs.dc.html">Add songs to playlist</a>
+      <div aria-hidden="true" style="width: 70%; height: 1px; margin: 12px 0; background: rgba(255,255,255,.1)"></div>
+      <p class="ttl">This group has no playlists</p>
+      <a class="s" href="WebCollectionDialogs.dc.html">Add playlists</a>
+    </div>
+  </section>
+
+  <section class="pan" aria-label="No search results">
+    <p class="tag">EMPTY · SEARCH</p>
+    <div style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 12px; background: #4C4C47"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; color: #CCC8BC"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span style="font-size: 15px">zeppelin</span></div>
+    <div class="mid">
+      <p class="ttl">No results for “zeppelin”</p>
+      <p class="sub">Check the spelling, or search by artist.</p>
+    </div>
+  </section>
+
+  <section class="pan" aria-label="Offline">
+    <p class="tag">OFFLINE</p>
+    <p style="margin: 0 0 6px; font-size: 13px; font-weight: 600">Web: a banner, changes disabled</p>
+    <div role="status" class="msg" style="background: #E5DCC5; color: #161615; font-weight: 600"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; stroke-width: 2.4; margin-top: 1px"><path d="M2 8.8a15 15 0 0 1 20 0"></path><path d="M5 12.5a10 10 0 0 1 14 0"></path><path d="M8.5 16.4a5 5 0 0 1 7 0"></path><path d="M2 2l20 20"></path></svg>You're offline</div>
+    <p style="margin: 18px 0 6px; font-size: 13px; font-weight: 600">Apps: keep playing; a server change shows</p>
+    <div role="alert" class="msg" style="background: #4C4C47; color: #EDEAE2"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-top: 1px; color: #E5DCC5"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg>Connect to the server to make changes. This change was not saved.</div>
+    <p style="margin: auto 0 0; font-size: 13px; color: #CCC8BC">Songs only on this device can still be edited offline.</p>
+  </section>
+
+  <section class="pan" aria-label="Errors">
+    <p class="tag">ERROR</p>
+    <div class="mid" style="flex: 0; padding: 14px 0 18px">
+      <p class="ttl">Couldn't load your songs</p>
+      <button class="s" type="button">Try again</button>
+    </div>
+    <p style="margin: 0 0 6px; font-size: 13px; font-weight: 600">Unknown result of a change</p>
+    <div role="alert" class="msg" style="background: #4C4C47; color: #EDEAE2"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-top: 1px; color: #E5DCC5"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5"></path><path d="M12 16h.01"></path></svg>Could not confirm this change. Reconnect to check its status.</div>
+  </section>
+
+  <section class="pan" aria-label="Signed out or expired session">
+    <p class="tag">SESSION EXPIRED</p>
+    <div class="mid">
+      <span aria-hidden="true" style="width: 56px; height: 56px; border-radius: 16px; background: #4C4C47; color: #E5DCC5; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 26px; height: 26px"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></span>
+      <p class="ttl">Sign in to sync and make changes</p>
+      <p class="sub">You can keep browsing and playing what's on this device. The web goes back to Log in.</p>
+      <a class="p" href="WebAuth.dc.html">Log in</a>
+    </div>
+  </section>
+
+  <section class="pan" aria-label="Account being deleted" style="background: #161615">
+    <p class="tag">ACCOUNT BEING DELETED</p>
+    <div class="mid">
+      <span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 4px #3A3A36; position: relative"><span style="position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 4px 0 0 0 #E5DCC5, inset 0 4px 0 0 #E5DCC5"></span></span>
+      <p class="ttl" role="status">Deleting your account…</p>
+      <p class="sub">Removing Song Sleeve's songs and data from this device. Keep the app open until this finishes. Your own music files are not touched.</p>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

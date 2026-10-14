@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Desktop player bar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+.wp-b{width:44px;height:44px;border-radius:50%;border:0;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none}
+.wp-b:disabled{cursor:not-allowed}
+.wp-b:focus-visible,.wp-a:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 12px clamp(16px, 3vw, 32px); background: #4C4C47; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; box-shadow: 0 -1px 0 rgba(255,255,255,.07)">
+  <a class="wp-a" href="WebPlaying.dc.html" aria-label="Open the player: {{title}}" style="flex: 1 1 240px; display: flex; align-items: center; gap: 14px; min-width: 0; color: #FFFFFF; text-decoration: none; border-radius: 12px">
+    <span style="position: relative; width: 56px; height: 56px; border-radius: 10px; background: #2D2D2A; color: {{iconColor}}; display: flex; align-items: center; justify-content: center; flex: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.1)"><span style="position: absolute; inset: 5px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12)"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{title}}</span>
+      <span style="font-size: 13px; color: #CCC8BC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{sub}}</span>
+    </span>
+  </a>
+
+  <div style="flex: 3 1 420px; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <button class="wp-b" type="button" onClick="{{toggleShuffle}}" aria-label="Shuffle" aria-pressed="{{shPressed}}" disabled="{{off}}" style="color: {{shColor}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="M16 3h5v5"></path><path d="M4 20 21 3"></path><path d="M21 16v5h-5"></path><path d="m15 15 6 6"></path><path d="M4 4l5 5"></path></svg></button>
+      <button class="wp-b" type="button" aria-label="Previous song" disabled="{{off}}" style="color: {{ctl}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M19 20 9 12l10-8v16z"></path><path d="M5 19V5" style="stroke-width: 2.4"></path></svg></button>
+      <button class="wp-b" type="button" onClick="{{togglePlay}}" aria-label="{{ppLabel}}" disabled="{{noPlay}}" style="width: 52px; height: 52px; background: {{ppBg}}; color: {{ppFg}}; box-shadow: inset 0 2px 0 rgba(255,255,255,.22)">
+        <sc-if value="{{showPause}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect class="f" x="6" y="4" width="4" height="16" rx="1"></rect><rect class="f" x="14" y="4" width="4" height="16" rx="1"></rect></svg></sc-if>
+        <sc-if value="{{showPlay}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="margin-left: 3px"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg></sc-if>
+      </button>
+      <button class="wp-b" type="button" aria-label="Next song" disabled="{{off}}" style="color: {{ctl}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="m5 4 10 8-10 8V4z"></path><path d="M19 5v14" style="stroke-width: 2.4"></path></svg></button>
+      <button class="wp-b" type="button" onClick="{{toggleRepeat}}" aria-label="Repeat current song" aria-pressed="{{rpPressed}}" disabled="{{off}}" style="color: {{rpColor}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path><path d="M11 10h1v4"></path></svg></button>
+    </div>
+    <div style="width: 100%; max-width: 560px; display: flex; align-items: center; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #D9D5CA">
+      <span>{{elapsed}}</span>
+      <span aria-hidden="true" style="position: relative; flex: 1; height: 6px; border-radius: 6px; background: #252522">
+        <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{pct}}; border-radius: 6px; background: {{fill}}"></span>
+        <sc-if value="{{knob}}" hint-placeholder-val="{{ true }}"><span style="position: absolute; left: {{pct}}; top: -5px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 2px 4px rgba(0,0,0,.5)"></span></sc-if>
+      </span>
+      <span>{{total}}</span>
+    </div>
+  </div>
+
+  <div style="flex: 1 1 240px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0">
+    <sc-if value="{{hasNotice}}" hint-placeholder-val="{{ false }}">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: #3A3A36; font-size: 13px; line-height: 1.35; color: #EDEAE2; max-width: 320px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; color: #E5DCC5"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>{{notice}}</span>
+    </sc-if>
+    <sc-if value="{{downloading}}" hint-placeholder-val="{{ false }}">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #E5DCC5; color: #161615; font-size: 13px; font-weight: 700"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; stroke-width: 2.6"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>Downloading song · 62%</span>
+      <button type="button" style="min-height: 40px; padding: 0 14px; border-radius: 12px; border: 0; background: transparent; color: #FFFFFF; font: 600 14px 'Instrument Sans', sans-serif; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45); cursor: pointer">Cancel</button>
+    </sc-if>
+    <a class="wp-b" href="WebPlaying.dc.html" aria-label="Open full player" style="color: #FFFFFF; background: #3A3A36; flex: none"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg></a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["playing","empty","updated","removed","webDownloading"],"default":"playing"},"$preview":{"width":1440,"height":84}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { playing: true, shuffle: true, repeat: false };
+  }
+  renderVals() {
+    const v = this.props.variant ?? 'playing';
+    const empty = v === 'empty';
+    const loading = v === 'webDownloading';
+    const ready = !empty && !loading;
+    const st = this.state;
+    const sh = st.shuffle && !empty;
+    const rp = st.repeat && !empty;
+    const playing = st.playing && ready;
+    const dim = '#75736C';
+    const notices = {
+      updated: 'This song was updated. Changes will be applied after playback finishes.',
+      removed: 'This song was deleted on another device. It will be removed after playback finishes.'
+    };
+    return {
+      title: empty ? 'Nothing playing' : 'Harbor Lights',
+      sub: empty ? 'Pick a song to start' : 'Marina Okafor · from Sunday Drive',
+      iconColor: empty ? '#8E8B82' : '#E5DCC5',
+      off: empty,
+      noPlay: empty || loading,
+      ctl: empty ? dim : '#FFFFFF',
+      shColor: empty ? dim : (sh ? '#E5DCC5' : '#FFFFFF'),
+      rpColor: empty ? dim : (rp ? '#E5DCC5' : '#FFFFFF'),
+      shPressed: sh ? 'true' : 'false',
+      rpPressed: rp ? 'true' : 'false',
+      ppBg: empty || loading ? '#5A5A54' : '#F26419',
+      ppFg: empty || loading ? '#8E8B82' : '#161615',
+      showPause: playing,
+      showPlay: !playing,
+      ppLabel: playing ? 'Pause' : 'Play',
+      elapsed: ready ? '1:24' : '0:00',
+      total: empty ? '--:--' : '3:52',
+      pct: ready ? '36%' : (loading ? '62%' : '0%'),
+      fill: loading ? 'repeating-linear-gradient(-45deg, #E5DCC5 0 8px, #CDC2A6 8px 16px)' : '#E5DCC5',
+      knob: ready,
+      hasNotice: !!notices[v],
+      notice: notices[v] ?? '',
+      downloading: loading,
+      togglePlay: () => this.setState({ playing: !this.state.playing }),
+      toggleShuffle: () => this.setState({ shuffle: !this.state.shuffle }),
+      toggleRepeat: () => this.setState({ repeat: !this.state.repeat })
+    };
+  }
+}
+</script>
+</body>
+</html>

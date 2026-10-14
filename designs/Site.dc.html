@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Song Sleeve · landing page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:3px solid #E5DCC5;outline-offset:3px}
+.wrap{max-width:1160px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.h2{margin:0;font-family:'Archivo',sans-serif;font-stretch:118%;font-weight:800;font-size:clamp(28px,3.4vw,40px);letter-spacing:-0.02em;line-height:1.1}
+.feat{display:flex;flex-direction:column;gap:10px;padding:22px;border-radius:20px;background:#4C4C47}
+.fi{width:44px;height:44px;border-radius:12px;background:#3A3A36;color:#E5DCC5;display:flex;align-items:center;justify-content:center}
+.dl{display:flex;align-items:center;gap:14px;min-height:76px;padding:0 20px;border-radius:18px;text-decoration:none}
+.lang{min-height:36px;padding:0 12px;border:0;border-radius:10px;font:600 13px 'Instrument Sans',sans-serif;cursor:pointer}
+.shot{display:flex;align-items:center;justify-content:center;border-radius:18px;background:#3A3A36;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);color:#CCC8BC;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-align:center}
+</style>
+</helmet>
+<div style="background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif">
+  <header class="wrap" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-top: 24px; padding-bottom: 24px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; background: #4C4C47; position: relative; overflow: hidden; display: block"><span style="position: absolute; right: -9px; top: 6px; width: 20px; height: 20px; border-radius: 50%; background: #F26419; box-shadow: 0 0 0 5px #161615"></span></span>
+      <span style="font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 20px; letter-spacing: -0.02em">Song Sleeve</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+      <div role="group" aria-label="Language" style="display: flex; gap: 2px; padding: 3px; border-radius: 13px; background: #3A3A36">
+        <button class="lang" type="button" aria-pressed="{{enP}}" onClick="{{toEn}}" style="background: {{enBg}}; color: {{enFg}}">English</button>
+        <button class="lang" type="button" lang="pt-BR" aria-pressed="{{ptP}}" onClick="{{toPt}}" style="background: {{ptBg}}; color: {{ptFg}}">Português (Brasil)</button>
+      </div>
+      <a href="#download" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 12px; background: #F26419; color: #161615; font-weight: 700; text-decoration: none">Download</a>
+    </div>
+  </header>
+
+  <section class="wrap" aria-labelledby="hero" style="display: flex; flex-wrap: wrap; align-items: center; gap: 40px 64px; padding-top: 40px; padding-bottom: 80px">
+    <div style="flex: 1 1 420px; min-width: 0">
+      <p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: .16em; color: #CCC8BC">A LOCAL-FIRST MUSIC PLAYER</p>
+      <h1 id="hero" style="margin: 14px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: clamp(40px, 5.4vw, 72px); line-height: 1; letter-spacing: -0.025em">Your music files, played and kept in order.</h1>
+      <p style="margin: 22px 0 0; font-size: 19px; line-height: 1.55; color: #EDEAE2; max-width: 520px">Song Sleeve plays the songs you already own, right where they are on your computer or phone. Sort them into playlists and groups without copying anything.</p>
+      <div style="margin-top: 30px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+        <a href="#download" style="display: inline-flex; flex-direction: column; justify-content: center; min-height: 60px; padding: 0 24px; border-radius: 16px; background: #F26419; color: #161615; text-decoration: none"><strong style="font-size: 17px">Download for Windows</strong><span style="font-size: 12px; font-weight: 600">[VERSION] · [SIZE]</span></a>
+        <a href="#download" style="color: #E5DCC5; font-weight: 600; text-underline-offset: 4px">Linux and Android</a>
+      </div>
+    </div>
+    <div aria-hidden="true" style="flex: 1 1 440px; position: relative; height: 420px; min-width: 0">
+      <div class="shot" style="position: absolute; left: 0; right: 70px; top: 0; height: 330px">[DESKTOP APP SCREENSHOT]</div>
+      <div class="shot" style="position: absolute; right: 0; bottom: 0; width: 180px; height: 360px; border-radius: 28px; background: #4C4C47; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 30px 50px -20px rgba(0,0,0,.8)">[ANDROID<br>SCREENSHOT]</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-feat" style="background: #4C4C47; padding: 72px 0">
+    <div class="wrap">
+      <h2 id="h-feat" class="h2">Available now</h2>
+      <div style="margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px">
+        <div class="feat" style="background: #2D2D2A"><span class="fi" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span><h3 style="margin: 0; font-size: 18px">Songs from files and folders</h3><p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Add single files or whole folders. They play from where they already are.</p></div>
+        <div class="feat" style="background: #2D2D2A"><span class="fi" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg></span><h3 style="margin: 0; font-size: 18px">Playlists and groups</h3><p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Put a song in as many playlists as you like, and gather playlists into groups.</p></div>
+        <div class="feat" style="background: #2D2D2A"><span class="fi" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span><h3 style="margin: 0; font-size: 18px">Artists with smart search</h3><p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Typos and spelling differences still find the artist you already have.</p></div>
+        <div class="feat" style="background: #2D2D2A"><span class="fi" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z"></path></svg></span><h3 style="margin: 0; font-size: 18px">A player that stays with you</h3><p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Keeps playing as you browse, and works with your system's media controls.</p></div>
+        <div class="feat" style="background: #2D2D2A"><span class="fi" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18"></path><path d="M12 3a14 14 0 0 0 0 18"></path></svg></span><h3 style="margin: 0; font-size: 18px">English and Português (Brasil)</h3><p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Choose your language once and every device follows.</p></div>
+        <div class="feat" style="background: #2D2D2A"><span class="fi" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></span><h3 style="margin: 0; font-size: 18px">MP3, AAC, FLAC and WAV</h3><p style="margin: 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Songs up to 30 minutes and 128 MB each.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="h-cloud" style="padding-top: 72px; padding-bottom: 72px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 28px; padding: clamp(24px, 4vw, 44px); border-radius: 28px; box-shadow: inset 0 0 0 2px #E5DCC5">
+      <span aria-hidden="true" style="width: 72px; height: 72px; border-radius: 22px; background: #4C4C47; color: #E5DCC5; display: flex; align-items: center; justify-content: center; flex: none"><svg class="i" viewBox="0 0 24 24" style="width: 34px; height: 34px"><path d="M12 13v8"></path><path d="m8 17 4-4 4 4"></path><path d="M20.4 15.6A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.3"></path></svg></span>
+      <div style="flex: 1 1 420px">
+        <span style="display: inline-flex; padding: 4px 11px; border-radius: 999px; background: #E5DCC5; color: #161615; font-size: 13px; font-weight: 700">Coming soon</span>
+        <h2 id="h-cloud" class="h2" style="margin-top: 12px">Cloud sync</h2>
+        <p style="margin: 10px 0 0; font-size: 17px; line-height: 1.55; color: #EDEAE2; max-width: 680px">Choose a song, a playlist, a group or your whole library to keep in a private cloud library. Your other devices download it and play it from their own storage.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="download" aria-labelledby="h-dl" style="background: #4C4C47; padding: 72px 0">
+    <div class="wrap">
+      <h2 id="h-dl" class="h2">Download Song Sleeve</h2>
+      <p style="margin: 10px 0 0; font-size: 16px; color: #D9D5CA">Windows, Linux and Android. macOS and iOS later.</p>
+      <div style="margin-top: 26px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px">
+        <a class="dl" href="#windows" style="background: #F26419; color: #161615"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path></svg><span style="display: flex; flex-direction: column"><strong style="font-size: 17px">Windows installer</strong><span style="font-size: 13px; font-weight: 600">Matches your computer · [VERSION] · [SIZE]</span></span></a>
+        <a class="dl" href="#appimage" style="background: #2D2D2A; color: #FFFFFF"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="color: #E5DCC5"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg><span style="display: flex; flex-direction: column"><strong style="font-size: 17px">Linux · AppImage</strong><span style="font-size: 13px; color: #CCC8BC">Most distributions · [VERSION] · [SIZE]</span></span></a>
+        <a class="dl" href="#deb" style="background: #2D2D2A; color: #FFFFFF"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="color: #E5DCC5"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg><span style="display: flex; flex-direction: column"><strong style="font-size: 17px">Linux · .deb</strong><span style="font-size: 13px; color: #CCC8BC">Debian, Ubuntu · [VERSION] · [SIZE]</span></span></a>
+        <a class="dl" href="#android" style="background: #2D2D2A; color: #FFFFFF"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="color: #E5DCC5"><rect x="6" y="2" width="12" height="20" rx="2"></rect><path d="M11 18h2"></path></svg><span style="display: flex; flex-direction: column"><strong style="font-size: 17px">Android</strong><span style="font-size: 13px; color: #CCC8BC">[GOOGLE PLAY OR APK] · [VERSION] · [SIZE]</span></span></a>
+      </div>
+      <p style="margin: 18px 0 0; display: flex; gap: 10px; font-size: 14px; line-height: 1.5; color: #EDEAE2; max-width: 760px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; margin-top: 2px; color: #E5DCC5"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01"></path><path d="M11 12h1v4h1"></path></svg>[WINDOWS SMARTSCREEN NOTE: Windows may warn about the installer while it isn't signed yet. Explain how to continue.]</p>
+    </div>
+  </section>
+
+  <footer class="wrap" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-top: 32px; padding-bottom: 40px; font-size: 14px; color: #D9D5CA">
+    <span>Song Sleeve</span>
+    <nav aria-label="Legal" style="display: flex; flex-wrap: wrap; gap: 18px"><a href="#terms" style="color: #E5DCC5">Terms of Use</a><a href="#privacy" style="color: #E5DCC5">Privacy Policy</a><a href="#contact" style="color: #E5DCC5">[CONTACT EMAIL]</a></nav>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2300}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { lang: 'en' };
+  }
+  renderVals() {
+    const pt = this.state.lang === 'pt';
+    const on = { bg: '#E5DCC5', fg: '#161615' };
+    const off = { bg: 'transparent', fg: '#FFFFFF' };
+    return {
+      enBg: pt ? off.bg : on.bg, enFg: pt ? off.fg : on.fg, enP: pt ? 'false' : 'true',
+      ptBg: pt ? on.bg : off.bg, ptFg: pt ? on.fg : off.fg, ptP: pt ? 'true' : 'false',
+      toEn: () => this.setState({ lang: 'en' }),
+      toPt: () => this.setState({ lang: 'pt' })
+    };
+  }
+}
+</script>
+</body>
+</html>

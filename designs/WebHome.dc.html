@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.h2{margin:0;font-family:'Archivo',sans-serif;font-stretch:118%;font-weight:800;font-size:22px;letter-spacing:-0.01em}
+.see{display:inline-flex;align-items:center;gap:2px;min-height:38px;padding:0 10px 0 16px;border-radius:999px;background:#4C4C47;color:#FFFFFF;font-size:14px;font-weight:600;text-decoration:none}
+.row1{display:grid;column-gap:16px;row-gap:0;grid-template-rows:auto;grid-auto-rows:0;overflow:hidden}
+.wcard{display:flex;align-items:center;gap:14px;padding:12px;border-radius:16px;background:#4C4C47;color:#FFFFFF;text-decoration:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 14px 24px -16px rgba(0,0,0,.7)}
+.wcard:hover{background:#56564F}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif">
+  <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+    <div style="flex: 1 1 240px; max-width: 100%; display: flex; background: #4C4C47; box-shadow: 1px 0 0 rgba(255,255,255,.06)"><dc-import name="WebSidebar" active="home" hint-size="100%,900px"></dc-import></div>
+
+    <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px clamp(16px, 3vw, 40px) 48px">
+      <div style="max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px">
+        <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+          <div>
+            <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 40px; letter-spacing: -0.02em">Home</h1>
+            <p style="margin: 4px 0 0; font-size: 15px; color: #D9D5CA">A quick look at your songs, groups and playlists.</p>
+          </div>
+          <a href="WebAddSongs.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 18px 0 14px; border-radius: 14px; background: #F26419; color: #161615; font-weight: 700; font-size: 15px; text-decoration: none"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; stroke-width: 2.4"><path d="M12 5v14M5 12h14"></path></svg>Add songs</a>
+        </header>
+
+        <section aria-labelledby="h-songs">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px">
+            <h2 id="h-songs" class="h2">Songs <span style="font-family: 'Instrument Sans', sans-serif; font-stretch: 100%; font-size: 13px; font-weight: 500; color: #CCC8BC; letter-spacing: 0">· newest first</span></h2>
+            <a class="see" href="WebLibrary.dc.html" aria-label="See all songs">See all<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px"><path d="m9 18 6-6-6-6"></path></svg></a>
+          </div>
+          <div class="row1" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr))">
+            <sc-for list="{{songs}}" as="s" hint-placeholder-count="6">
+              <a href="WebPlaying.dc.html" style="display: flex; flex-direction: column; gap: 10px; color: #FFFFFF; text-decoration: none; border-radius: 14px; min-width: 0">
+                <span style="position: relative; aspect-ratio: 1 / 1; border-radius: 14px; background: #4C4C47; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 14px 24px -14px rgba(0,0,0,.75)">
+                  <span style="position: absolute; inset: 9px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1)"></span>
+                  <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 38px; height: 38px; stroke-width: 1.8"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                  <sc-if value="{{s.local}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; left: 10px; bottom: 10px; padding: 2px 7px; border-radius: 6px; background: #2D2D2A; color: #EDEAE2; font-size: 11px; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(255,255,255,.35)">On this device</span></sc-if>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 2px; min-height: 40px; min-width: 0">
+                  <span style="font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.name}}</span>
+                  <span style="font-size: 13px; color: #D9D5CA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.artist}}</span>
+                </span>
+              </a>
+            </sc-for>
+          </div>
+        </section>
+
+        <section aria-labelledby="h-groups">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px">
+            <h2 id="h-groups" class="h2">Groups <span style="font-family: 'Instrument Sans', sans-serif; font-stretch: 100%; font-size: 13px; font-weight: 500; color: #CCC8BC; letter-spacing: 0">· newest first</span></h2>
+            <a class="see" href="WebLibrary.dc.html" aria-label="See all groups">See all<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px"><path d="m9 18 6-6-6-6"></path></svg></a>
+          </div>
+          <div class="row1" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))">
+            <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+              <a class="wcard" href="WebGroup.dc.html">
+                <span aria-hidden="true" style="position: relative; width: 68px; height: 68px; flex: none">
+                  <span style="position: absolute; left: 12px; top: 0; width: 52px; height: 52px; border-radius: 9px; background: #6E6E67; transform: rotate(10deg)"></span>
+                  <span style="position: absolute; left: 6px; top: 6px; width: 52px; height: 52px; border-radius: 9px; background: #5E5E58; transform: rotate(4deg)"></span>
+                  <span style="position: absolute; left: 0; top: 14px; width: 54px; height: 54px; border-radius: 9px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1)"><svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px"><path d="m12 2 10 5-10 5L2 7z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg></span>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+                  <span style="font-size: 16px; font-weight: 600">{{g.name}}</span>
+                  <span style="font-size: 13px; color: #CCC8BC">{{g.meta}}</span>
+                </span>
+              </a>
+            </sc-for>
+          </div>
+        </section>
+
+        <section aria-labelledby="h-pl">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px">
+            <h2 id="h-pl" class="h2">Playlists <span style="font-family: 'Instrument Sans', sans-serif; font-stretch: 100%; font-size: 13px; font-weight: 500; color: #CCC8BC; letter-spacing: 0">· newest first</span></h2>
+            <a class="see" href="WebLibrary.dc.html" aria-label="See all playlists">See all<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px"><path d="m9 18 6-6-6-6"></path></svg></a>
+          </div>
+          <div class="row1" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))">
+            <sc-for list="{{playlists}}" as="p" hint-placeholder-count="4">
+              <a class="wcard" href="WebPlaylist.dc.html">
+                <span aria-hidden="true" style="position: relative; width: 68px; height: 68px; flex: none">
+                  <span style="position: absolute; left: 12px; top: 0; width: 56px; height: 56px; border-radius: 9px; background: #5E5E58"></span>
+                  <span style="position: absolute; left: 0; top: 12px; width: 56px; height: 56px; border-radius: 9px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1)"><svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px"><path d="M21 15V6"></path><circle cx="18.5" cy="15.5" r="2.5"></circle><path d="M12 12H3"></path><path d="M16 6H3"></path><path d="M12 18H3"></path></svg></span>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+                  <span style="font-size: 16px; font-weight: 600">{{p.name}}</span>
+                  <span style="font-size: 13px; color: #CCC8BC">{{p.meta}}</span>
+                </span>
+              </a>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div style="position: sticky; bottom: 0; z-index: 5; background: #4C4C47; box-shadow: 0 -16px 30px -16px rgba(0,0,0,.6)"><dc-import name="WebPlayer" hint-size="100%,84px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      songs: [
+        { name: 'Rehearsal take 3', artist: '', local: true },
+        { name: 'Lowland', artist: 'Wren Atlas', local: true },
+        { name: 'Night Market', artist: 'Ines Caldera' },
+        { name: 'Harbor Lights', artist: 'Marina Okafor' },
+        { name: 'Copper Sky', artist: 'The Low Tides' },
+        { name: 'Saltwater Hymn', artist: 'Juniper Hall' },
+        { name: 'Glass Garden', artist: 'Northbound Static' },
+        { name: 'Morning Ferry', artist: 'The Low Tides' }
+      ],
+      groups: [
+        { name: 'Travel', meta: '3 playlists · 41 songs' },
+        { name: 'Moods', meta: '4 playlists · 63 songs' },
+        { name: 'Work', meta: '2 playlists · 28 songs' }
+      ],
+      playlists: [
+        { name: 'Sunday Drive', meta: '14 songs · 52 min' },
+        { name: 'Late Night', meta: '22 songs · 1 h 24 min' },
+        { name: 'Focus', meta: '31 songs · 2 h 3 min' },
+        { name: 'Kitchen Radio', meta: '18 songs · 1 h 6 min' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

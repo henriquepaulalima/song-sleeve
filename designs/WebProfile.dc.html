@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Profile · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.card{padding:22px;border-radius:22px;background:#4C4C47;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 20px 30px -20px rgba(0,0,0,.7)}
+.cap{margin:0 0 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;font-weight:500;color:#CCC8BC}
+.sb{min-height:40px;padding:0 16px;border-radius:12px;border:0;background:transparent;color:#FFFFFF;font:600 14px 'Instrument Sans',sans-serif;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5);cursor:pointer;flex:none}
+.pb{min-height:40px;padding:0 16px;border-radius:12px;border:0;background:#F26419;color:#161615;font:700 14px 'Instrument Sans',sans-serif;cursor:pointer;flex:none}
+.dev{display:flex;flex-wrap:wrap;align-items:center;gap:14px;min-height:68px;padding:8px 2px}
+.row{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;min-height:54px;padding:0 14px;border-radius:14px;border:0;background:#3A3A36;color:#FFFFFF;font:600 15px 'Instrument Sans',sans-serif;text-align:left;text-decoration:none;cursor:pointer}
+.sel{width:100%;min-height:46px;padding:0 36px 0 14px;border-radius:12px;border:0;background:#3A3A36;color:#FFFFFF;font:500 15px 'Instrument Sans',sans-serif;appearance:none;-webkit-appearance:none}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif">
+  <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+    <div style="flex: 1 1 240px; max-width: 100%; display: flex; background: #4C4C47; box-shadow: 1px 0 0 rgba(255,255,255,.06)"><dc-import name="WebSidebar" active="profile" hint-size="100%,900px"></dc-import></div>
+    <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px clamp(16px, 3vw, 40px) 48px">
+      <div style="max-width: 1120px; margin: 0 auto">
+        <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 40px; letter-spacing: -0.02em">Profile</h1>
+        <div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+          <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+            <section class="card" aria-label="Account">
+              <p class="cap">ACCOUNT</p>
+              <div style="display: flex; align-items: center; gap: 14px">
+                <span aria-hidden="true" style="width: 52px; height: 52px; border-radius: 50%; background: #E5DCC5; color: #161615; display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 21px; flex: none">A</span>
+                <div><div style="font-size: 18px; font-weight: 600">alex@example.com</div><div style="display: flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 13px; color: #CCC8BC"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 13px; height: 13px"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>Your email can't be changed</div></div>
+              </div>
+              <div style="margin-top: 18px; position: relative; max-width: 320px">
+                <label for="lang" style="display: block; margin-bottom: 6px; font-size: 14px; font-weight: 600">Language</label>
+                <select id="lang" class="sel"><option>English</option><option lang="pt-BR">Português (Brasil)</option></select>
+                <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; right: 12px; bottom: 15px; width: 16px; height: 16px; pointer-events: none; color: #CCC8BC"><path d="m6 9 6 6 6-6"></path></svg>
+                <p style="margin: 6px 0 0; font-size: 13px; color: #CCC8BC">Used on all your devices and in emails.</p>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="h-lib">
+              <p id="h-lib" class="cap">LIBRARY</p>
+              <sc-if value="{{cloud}}" hint-placeholder-val="{{ true }}">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 15px"><strong style="font-weight: 600">Cloud storage</strong><span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px">{{used}} of 25 GB used</span></div>
+                <div aria-hidden="true" style="margin-top: 10px; height: 10px; border-radius: 10px; background: #252522; overflow: hidden"><div style="height: 100%; width: {{usedPct}}; background: {{usedFill}}"></div></div>
+                <sc-if value="{{nearFull}}" hint-placeholder-val="{{ false }}">
+                  <p role="status" style="margin: 12px 0 0; display: flex; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #E5DCC5; color: #161615; font-size: 14px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-top: 2px; stroke-width: 2.4"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg>Your cloud storage is almost full. Delete synced songs to free space.</p>
+                </sc-if>
+              </sc-if>
+              <sc-if value="{{noCloud}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 15px"><strong style="font-weight: 600">Cloud sync</strong><span style="padding: 4px 10px; border-radius: 999px; background: #3A3A36; color: #E5DCC5; font-size: 12px; font-weight: 700">Coming soon</span></div>
+              </sc-if>
+              <dl style="margin: 18px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+                <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: #3A3A36"><dt style="order: 2; font-size: 13px; color: #CCC8BC">synced songs</dt><dd style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 600">{{synced}}</dd></div>
+                <sc-if value="{{desktop}}" hint-placeholder-val="{{ true }}"><div style="display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: #3A3A36"><dt style="order: 2; font-size: 13px; color: #CCC8BC">songs only on this computer</dt><dd style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 600">32</dd></div></sc-if>
+              </dl>
+              <sc-if value="{{desktop}}" hint-placeholder-val="{{ true }}">
+                <p style="margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: #EDEAE2">Songs on this computer only exist here. Uninstalling the app or clearing its data removes them and your changes to them. The music files stay where they are.</p>
+              </sc-if>
+            </section>
+            <p style="margin: 0 4px; font-size: 14px; color: #D9D5CA"><a href="Site.dc.html" style="color: #E5DCC5">Terms of Use</a> · <a href="Site.dc.html" style="color: #E5DCC5">Privacy Policy</a></p>
+          </div>
+
+          <div style="flex: 1.3 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+            <section class="card" aria-labelledby="h-dev">
+              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px"><p id="h-dev" class="cap" style="margin: 0">SIGNED-IN DEVICES</p><button type="button" onClick="{{askAll}}" class="sb" style="box-shadow: inset 0 0 0 1.5px #F26419">Log out all devices</button></div>
+              <sc-if value="{{confirmAll}}" hint-placeholder-val="{{ false }}">
+                <div role="alert" style="margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px; border-radius: 14px; background: #E5DCC5; color: #161615">
+                  <span style="flex: 1 1 240px; font-size: 14px; line-height: 1.45"><strong>Log out everywhere?</strong> Every device, including this one, will need to sign in again.</span>
+                  <button class="sb" type="button" onClick="{{cancel}}" style="color: #161615; box-shadow: inset 0 0 0 1.5px rgba(22,22,21,.5)">Cancel</button>
+                  <a class="pb" href="WebStart.dc.html" style="display: inline-flex; align-items: center; text-decoration: none">Log out all</a>
+                </div>
+              </sc-if>
+              <ul style="list-style: none; margin: 8px 0 0; padding: 0">
+                <sc-for list="{{devices}}" as="d" hint-placeholder-count="3">
+                  <li class="dev" style="box-shadow: {{d.line}}">
+                    <span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 12px; background: #3A3A36; color: {{d.iconColor}}; display: flex; align-items: center; justify-content: center; flex: none">
+                      <sc-if value="{{d.isPhone}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><rect x="6" y="2" width="12" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></sc-if>
+                      <sc-if value="{{d.isLaptop}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><rect x="4" y="4" width="16" height="11" rx="1.5"></rect><path d="M2 19h20"></path></svg></sc-if>
+                      <sc-if value="{{d.isWeb}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18"></path><path d="M12 3a14 14 0 0 0 0 18"></path></svg></sc-if>
+                    </span>
+                    <span style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 15px; font-weight: 600">{{d.name}}</span><span style="font-size: 13px; color: #CCC8BC">{{d.when}}</span></span>
+                    <sc-if value="{{d.current}}" hint-placeholder-val="{{ false }}"><span style="padding: 5px 10px; border-radius: 999px; background: #E5DCC5; color: #161615; font-size: 12px; font-weight: 700">This device</span></sc-if>
+                    <sc-if value="{{d.idle}}" hint-placeholder-val="{{ true }}"><button class="sb" type="button" onClick="{{d.ask}}" aria-label="Log out {{d.name}}">Log out</button></sc-if>
+                    <sc-if value="{{d.asking}}" hint-placeholder-val="{{ false }}"><span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-size: 13px; color: #EDEAE2">Sign this device out?</span><button class="sb" type="button" onClick="{{cancel}}">Cancel</button><button class="pb" type="button" onClick="{{d.confirm}}">Log out</button></span></sc-if>
+                  </li>
+                </sc-for>
+              </ul>
+            </section>
+
+            <section class="card" aria-labelledby="h-sec">
+              <p id="h-sec" class="cap">SIGN-IN &amp; ACCOUNT</p>
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <a class="row" href="WebAccountDialogs.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; color: #E5DCC5"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>Change password</a>
+                <a class="row" href="WebStart.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; color: #E5DCC5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>Log out current session</a>
+                <sc-if value="{{desktop}}" hint-placeholder-val="{{ true }}">
+                  <a class="row" href="WebAccountDialogs.dc.html" style="align-items: flex-start; padding-top: 12px; padding-bottom: 12px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; color: #F26419; margin-top: 1px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg><span style="display: flex; flex-direction: column; gap: 2px"><span>Log out and remove from this device</span><span style="font-size: 13px; font-weight: 400; color: #CCC8BC">Also deletes this computer's songs and data for this account</span></span></a>
+                </sc-if>
+              </div>
+              <a href="WebAccountDialogs.dc.html" style="margin-top: 16px; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: #FFFFFF; font-size: 15px; font-weight: 600; text-decoration: underline; text-decoration-color: #F26419; text-underline-offset: 4px">Delete account</a>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div style="position: sticky; bottom: 0; z-index: 5; background: #4C4C47; box-shadow: 0 -16px 30px -16px rgba(0,0,0,.6)"><dc-import name="WebPlayer" hint-size="100%,84px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"cloud":{"editor":"enum","options":["enabled","nearlyFull","comingSoon"],"default":"enabled"},"platform":{"editor":"enum","options":["desktop","web"],"default":"desktop"},"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { asking: null, removed: {} };
+  }
+  renderVals() {
+    const st = this.state;
+    const c = this.props.cloud ?? 'enabled';
+    const web = (this.props.platform ?? 'desktop') === 'web';
+    const near = c === 'nearlyFull';
+    const all = [
+      web ? { name: 'Firefox · Web', kind: 'web', when: 'Active now', current: true } : { name: 'ThinkPad · Linux', kind: 'laptop', when: 'Active now', current: true },
+      { name: 'Pixel 8 · Android', kind: 'phone', when: 'Last active 2 hours ago' },
+      { name: 'Home PC · Windows', kind: 'laptop', when: 'Last active Oct 9' }
+    ].filter((d) => !st.removed[d.name]);
+    return {
+      cloud: c !== 'comingSoon', noCloud: c === 'comingSoon', nearFull: near,
+      used: near ? '23.1 GB' : '8.4 GB', usedPct: near ? '92%' : '34%', usedFill: near ? '#F26419' : '#E5DCC5',
+      synced: c === 'comingSoon' ? '0' : '182',
+      desktop: !web,
+      confirmAll: st.asking === '__all',
+      askAll: () => this.setState({ asking: '__all' }),
+      cancel: () => this.setState({ asking: null }),
+      devices: all.map((d, i) => {
+        const asking = st.asking === d.name;
+        return {
+          ...d, current: !!d.current, idle: !d.current && !asking, asking,
+          isPhone: d.kind === 'phone', isLaptop: d.kind === 'laptop', isWeb: d.kind === 'web',
+          iconColor: d.current ? '#E5DCC5' : '#FFFFFF',
+          line: i === 0 ? 'none' : 'inset 0 1px 0 rgba(255,255,255,.08)',
+          ask: () => this.setState({ asking: d.name }),
+          confirm: () => this.setState({ asking: null, removed: { ...this.state.removed, [d.name]: true } })
+        };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

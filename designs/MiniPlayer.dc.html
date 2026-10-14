@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Persistent player bar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+.pp{width:44px;height:44px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.pp:disabled{cursor:not-allowed}
+.pp:focus-visible,.open:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 80px; box-sizing: border-box; padding: 4px 10px 8px; background: #2D2D2A; font-family: 'Instrument Sans', sans-serif; color: #FFFFFF">
+  <div style="position: relative; height: 68px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 10px; background: #4C4C47; border-radius: 18px; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 14px 24px -12px rgba(0,0,0,.7)">
+    <span aria-hidden="true" style="position: absolute; left: 0; top: 0; height: 3px; width: {{progress}}; background: #E5DCC5"></span>
+    <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0">
+        <div style="width: 44px; height: 44px; border-radius: 9px; background: #3A3A36; color: #8E8B82; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); flex: none">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+        </div>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 15px; font-weight: 600">Nothing playing</span>
+          <span style="font-size: 13px; color: #CCC8BC">Pick a song to start</span>
+        </span>
+      </div>
+      <button class="pp" type="button" disabled aria-label="Play (no song selected)" style="background: #5A5A54; color: #8E8B82">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; margin-left: 2px"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg>
+      </button>
+    </sc-if>
+    <sc-if value="{{notEmpty}}" hint-placeholder-val="{{ true }}">
+      <a class="open" href="Playing.dc.html" aria-label="Open Now Playing: Harbor Lights by Marina Okafor" style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 52px; text-decoration: none; color: #FFFFFF; border-radius: 12px">
+        <span style="width: 44px; height: 44px; border-radius: 9px; background: #3A3A36; color: #E5DCC5; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); flex: none">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+          <span style="font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Harbor Lights</span>
+          <span title="{{noticeFull}}" style="display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: {{subW}}; color: {{subColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><sc-if value="{{hasNotice}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></sc-if>{{sub}}</span>
+        </span>
+      </a>
+      <button class="pp" type="button" onClick="{{toggle}}" aria-label="{{ppLabel}}" style="background: #F26419; color: #161615">
+        <sc-if value="{{playing}}" hint-placeholder-val="{{ true }}">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><rect class="f" x="6" y="4" width="4" height="16" rx="1"></rect><rect class="f" x="14" y="4" width="4" height="16" rx="1"></rect></svg>
+        </sc-if>
+        <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; margin-left: 2px"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg>
+        </sc-if>
+      </button>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["playing","empty","updated","removed"],"default":"playing"},"$preview":{"width":390,"height":80}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { playing: true };
+  }
+  renderVals() {
+    const v = this.props.variant ?? 'playing';
+    const empty = v === 'empty';
+    const playing = this.state.playing;
+    return {
+      empty,
+      notEmpty: !empty,
+      playing,
+      paused: !playing,
+      ppLabel: playing ? 'Pause' : 'Play',
+      progress: empty ? '0%' : '36%',
+      hasNotice: v === 'updated' || v === 'removed',
+      sub: v === 'updated' ? 'Updated · applies after playback' : (v === 'removed' ? 'Removed · leaves after playback' : 'Marina Okafor'),
+      noticeFull: v === 'updated' ? 'This song was updated. Changes will be applied after playback finishes.' : (v === 'removed' ? 'This song was deleted on another device. It will be removed after playback finishes.' : ''),
+      subColor: v === 'updated' || v === 'removed' ? '#E5DCC5' : '#CCC8BC',
+      subW: v === 'updated' || v === 'removed' ? '600' : '400',
+      toggle: () => this.setState({ playing: !this.state.playing })
+    };
+  }
+}
+</script>
+</body>
+</html>

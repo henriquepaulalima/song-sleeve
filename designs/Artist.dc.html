@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Artist detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+dc-import{display:block}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.rb{width:44px;height:44px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;background:#4C4C47;color:#FFFFFF;box-shadow:inset 0 1px 0 rgba(255,255,255,.1);text-decoration:none;cursor:pointer;flex:none}
+.mi{display:flex;align-items:center;gap:12px;width:100%;min-height:48px;padding:0 14px;border:0;border-radius:10px;background:none;color:#FFFFFF;font:500 15px 'Instrument Sans',sans-serif;text-align:left;cursor:pointer}
+.mi:disabled{cursor:not-allowed;color:#ADA99E}
+</style>
+</helmet>
+<main style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif">
+  <header style="padding: 52px 20px 0">
+    <div style="display: flex; justify-content: space-between; position: relative">
+      <a class="rb" href="Artists.dc.html" aria-label="Back to Artists"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+      <button class="rb" type="button" onClick="{{toggleMenu}}" aria-haspopup="menu" aria-expanded="{{menuExp}}" aria-label="Artist options"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle class="f" cx="5" cy="12" r="1.7"></circle><circle class="f" cx="12" cy="12" r="1.7"></circle><circle class="f" cx="19" cy="12" r="1.7"></circle></svg></button>
+      <sc-if value="{{menu}}" hint-placeholder-val="{{ false }}">
+        <div role="menu" aria-label="Artist options" style="position: absolute; right: 0; top: 52px; z-index: 5; width: 260px; padding: 6px; border-radius: 16px; background: #3A3A36; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 24px 40px -14px rgba(0,0,0,.9)">
+          <button class="mi" type="button" role="menuitem"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>Rename artist</button>
+          <button class="mi" type="button" role="menuitem" disabled aria-describedby="del-why" style="align-items: flex-start; padding-top: 10px; padding-bottom: 10px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; margin-top: 1px"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg><span style="display: flex; flex-direction: column; gap: 2px"><span>Delete artist</span><span id="del-why" style="font-size: 12px; color: #CCC8BC">Available when no song uses this artist</span></span></button>
+        </div>
+      </sc-if>
+    </div>
+    <div style="margin-top: 14px; display: flex; align-items: center; gap: 16px">
+      <span aria-hidden="true" style="width: 92px; height: 92px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; background: repeating-radial-gradient(circle at center, #161615 0 2px, #222220 2px 4px); box-shadow: 0 16px 26px -14px rgba(0,0,0,.85)">
+        <span style="width: 46px; height: 46px; border-radius: 50%; background: #E5DCC5; color: #161615; display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 20px">M</span>
+      </span>
+      <div style="min-width: 0">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .16em; color: #D9D5CA">ARTIST</div>
+        <h1 style="margin: 4px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 112%; font-weight: 800; font-size: 28px; line-height: 1.1; letter-spacing: -0.02em">Marina Okafor</h1>
+        <p style="margin: 4px 0 0; font-size: 14px; color: #D9D5CA">6 songs · in library order</p>
+      </div>
+    </div>
+    <div style="margin-top: 18px; display: flex; align-items: center; gap: 10px">
+      <a href="Playing.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 20px 0 16px; border-radius: 16px; background: #F26419; color: #161615; font-weight: 700; font-size: 15px; text-decoration: none"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg>Play</a>
+      <a class="rb" href="Playing.dc.html" aria-label="Shuffle play" style="width: 48px; height: 48px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"></path><path d="M4 20 21 3"></path><path d="M21 16v5h-5"></path><path d="m15 15 6 6"></path><path d="M4 4l5 5"></path></svg></a>
+    </div>
+  </header>
+
+  <ol aria-label="Songs by Marina Okafor" style="list-style: none; margin: 20px 0 0; padding: 0 12px 200px; display: flex; flex-direction: column; gap: 8px">
+    <sc-for list="{{songs}}" as="s" hint-placeholder-count="6">
+      <li><dc-import name="SongRow" item="{{s}}" hint-size="100%,64px"></dc-import></li>
+    </sc-for>
+  </ol>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0">
+    <dc-import name="MiniPlayer" hint-size="390px,80px"></dc-import>
+    <dc-import name="TabBar" active="artists" hint-size="390px,88px"></dc-import>
+  </div>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { menu: false };
+  }
+  renderVals() {
+    const base = { grip: false, artist: '' };
+    return {
+      menu: this.state.menu,
+      menuExp: this.state.menu ? 'true' : 'false',
+      toggleMenu: () => this.setState({ menu: !this.state.menu }),
+      songs: [
+        { ...base, name: 'Harbor Lights', dur: '3:52', status: 'synced', playing: true },
+        { ...base, name: 'Undertow', dur: '5:02', status: 'relink' },
+        { ...base, name: 'Paper Moons', dur: '3:37', status: 'local' },
+        { ...base, name: 'Tidewater', dur: '4:12', status: 'updating', pct: 70 },
+        { ...base, name: 'Blue Hour', dur: '3:05', status: 'synced' },
+        { ...base, name: 'Ember Season', dur: '4:20', status: 'needsDownload' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

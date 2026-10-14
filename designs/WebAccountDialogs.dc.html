@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Account dialogs · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.dlg{position:relative;width:560px;max-width:calc(100% - 32px);box-sizing:border-box;padding:28px;border-radius:26px;background:#4C4C47;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 40px 70px -20px rgba(0,0,0,.95)}
+.h{margin:0;font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:800;font-size:26px;letter-spacing:-0.015em;line-height:1.2}
+.lbl{font-size:13px;font-weight:600}
+.in{width:100%;box-sizing:border-box;min-height:50px;padding:0 14px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:#3A3A36;color:#FFFFFF;font:400 16px 'Instrument Sans',sans-serif;outline:none}
+.p{display:flex;align-items:center;justify-content:center;min-height:52px;padding:0 22px;border-radius:16px;border:0;background:#F26419;color:#161615;font:700 16px 'Instrument Sans',sans-serif;text-decoration:none;cursor:pointer}
+.s{display:flex;align-items:center;justify-content:center;min-height:52px;padding:0 22px;border-radius:16px;border:0;background:transparent;color:#FFFFFF;font:600 15px 'Instrument Sans',sans-serif;text-decoration:none;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.4);cursor:pointer}
+.rule{display:flex;align-items:center;gap:8px;font-size:13px}
+.ok{width:18px;height:18px;border-radius:50%;background:#E5DCC5;color:#161615;display:flex;align-items:center;justify-content:center;flex:none}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; background: #2D2D2A; font-family: 'Instrument Sans', sans-serif; color: #FFFFFF">
+  <div aria-hidden="true" style="position: absolute; inset: 0"><dc-import name="WebProfile" hint-size="1440px,900px"></dc-import></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(22,22,21,.76)"></div>
+  <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center">
+
+    <sc-if value="{{isPw}}" hint-placeholder-val="{{ true }}">
+      <section class="dlg" role="dialog" aria-modal="true" aria-labelledby="t1">
+        <h1 id="t1" class="h">Change password</h1>
+        <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="cur">Current password</label><input class="in" id="cur" type="password" value="password-here" readonly></div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label class="lbl" for="np">New password</label><input class="in" id="np" type="password" value="saltwater-hymn" readonly aria-describedby="np-r">
+            <ul id="np-r" style="list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+              <li class="rule"><span class="ok" aria-hidden="true"><svg class="i" viewBox="0 0 24 24" style="width: 12px; height: 12px; stroke-width: 3"><path d="M20 6 9 17l-5-5"></path></svg></span>10 to 128 characters, any kind</li>
+              <li class="rule"><span class="ok" aria-hidden="true"><svg class="i" viewBox="0 0 24 24" style="width: 12px; height: 12px; stroke-width: 3"><path d="M20 6 9 17l-5-5"></path></svg></span>Not one of the most common passwords</li>
+            </ul>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="cf">Confirm new password</label><input class="in" id="cf" type="password" value="saltwater-hymn" readonly></div>
+        </div>
+        <sc-if value="{{pwDone}}" hint-placeholder-val="{{ false }}">
+          <p role="status" style="margin: 16px 0 0; display: flex; gap: 8px; padding: 12px; border-radius: 12px; background: #E5DCC5; color: #161615; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-top: 2px; stroke-width: 2.6"><path d="M20 6 9 17l-5-5"></path></svg>Password changed. Your other devices were signed out. We emailed you a confirmation.</p>
+        </sc-if>
+        <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px"><a class="s" href="WebProfile.dc.html">{{pwCancel}}</a><sc-if value="{{pwForm}}" hint-placeholder-val="{{ true }}"><button class="p" type="button" onClick="{{savePw}}">Change password</button></sc-if></div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isRemove}}" hint-placeholder-val="{{ false }}">
+      <section class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="t2">
+        <span aria-hidden="true" style="width: 56px; height: 56px; border-radius: 18px; background: #F26419; color: #161615; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 26px; height: 26px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg></span>
+        <h1 id="t2" class="h" style="margin-top: 16px">Log out and remove from this device?</h1>
+        <p style="margin: 12px 0 0; font-size: 16px; line-height: 1.5; color: #EDEAE2">Local songs on this device and their playlist entries will be lost permanently. Synced songs stay in your cloud.</p>
+        <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: #CCC8BC">Removes this account's Song Sleeve folder and data from this computer. Your own music files outside the Song Sleeve folder are never touched. Works offline.</p>
+        <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px"><a class="s" href="WebProfile.dc.html">Cancel</a><a class="p" href="WebStart.dc.html">Log out and remove</a></div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isDelete}}" hint-placeholder-val="{{ false }}">
+      <section class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="t3" style="width: 600px">
+        <span aria-hidden="true" style="width: 56px; height: 56px; border-radius: 18px; background: #F26419; color: #161615; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 26px; height: 26px"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg></span>
+        <h1 id="t3" class="h" style="margin-top: 16px">Delete account</h1>
+        <p style="margin: 12px 0 0; padding: 14px; border-radius: 14px; background: #3A3A36; font-size: 15px; line-height: 1.55; color: #FFFFFF; font-weight: 500">Permanently delete your account and library? This removes your cloud songs, playlists, groups, artists and the songs stored by Song Sleeve on your devices. You will be signed out on every device. This cannot be cancelled or undone. Offline devices are cleaned when they next connect.</p>
+        <p style="margin: 10px 0 0; font-size: 13px; color: #CCC8BC">Your own music files outside the Song Sleeve folder stay where they are.</p>
+        <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="rp">Enter your current password to confirm</label><input class="in" id="rp" type="password" value="password-here" readonly></div>
+        <div style="margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px"><a class="s" href="WebProfile.dc.html">Keep my account</a><button class="p" type="button" onClick="{{startDelete}}">Permanently delete account</button></div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isDeleting}}" hint-placeholder-val="{{ false }}">
+      <section class="dlg" role="status" aria-labelledby="t4" style="text-align: center; background: #161615">
+        <span aria-hidden="true" style="margin: 6px auto 0; display: block; width: 48px; height: 48px; border-radius: 50%; box-shadow: inset 0 0 0 4px #3A3A36; position: relative"><span style="position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 4px 0 0 0 #E5DCC5, inset 0 4px 0 0 #E5DCC5"></span></span>
+        <h1 id="t4" class="h" style="margin-top: 18px">Deleting your account…</h1>
+        <p style="margin: 10px 0 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Removing Song Sleeve's songs and data from this computer. Keep the app open until this finishes.</p>
+      </section>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dialog":{"editor":"enum","options":["changePassword","passwordChanged","logOutAndRemove","deleteAccount","deleting"],"default":"deleteAccount"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { d: null };
+  }
+  renderVals() {
+    const d = this.state.d ?? this.props.dialog ?? 'deleteAccount';
+    const pw = d === 'changePassword' || d === 'passwordChanged';
+    return {
+      isPw: pw, pwDone: d === 'passwordChanged', pwForm: d === 'changePassword',
+      pwCancel: d === 'passwordChanged' ? 'Done' : 'Cancel',
+      savePw: () => this.setState({ d: 'passwordChanged' }),
+      isRemove: d === 'logOutAndRemove',
+      isDelete: d === 'deleteAccount',
+      isDeleting: d === 'deleting',
+      startDelete: () => this.setState({ d: 'deleting' })
+    };
+  }
+}
+</script>
+</body>
+</html>

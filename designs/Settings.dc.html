@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.card{padding:14px;border-radius:18px;background:#4C4C47;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.cap{margin:0 0 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;font-weight:500;color:#CCC8BC}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 16px;border-radius:14px;border:0;font:600 15px 'Instrument Sans',sans-serif;cursor:pointer}
+.sw{position:relative;width:52px;height:32px;border-radius:999px;border:0;cursor:pointer;flex:none}
+.knob{position:absolute;top:4px;width:24px;height:24px;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,.4)}
+.res{display:flex;align-items:center;justify-content:space-between;font-size:14px;padding:6px 0}
+</style>
+</helmet>
+<main style="width: 390px; height: 1000px; box-sizing: border-box; position: relative; overflow: hidden; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif">
+  <header style="padding: 52px 20px 0; display: flex; align-items: center; gap: 12px">
+    <a href="Profile.dc.html" aria-label="Back to Profile" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #4C4C47; color: #FFFFFF"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+    <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 30px; letter-spacing: -0.02em">Settings</h1>
+  </header>
+
+  <div style="padding: 18px 16px 40px; display: flex; flex-direction: column; gap: 12px">
+    <section class="card" aria-labelledby="h-folder">
+      <p id="h-folder" class="cap">SONG SLEEVE FOLDER</p>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; color: #E5DCC5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">Internal storage / Song Sleeve</span>
+      </div>
+      <p style="margin: 12px 0 0; display: flex; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #3A3A36; font-size: 13px; line-height: 1.45; color: #EDEAE2"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-top: 1px; color: #E5DCC5; stroke-width: 2.4"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg>Only synced songs belong here. Files you add here are permanently deleted, and files you change are restored.</p>
+
+      <sc-if value="{{running}}" hint-placeholder-val="{{ false }}">
+        <div role="status" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; justify-content: space-between; font-size: 14px"><strong style="font-weight: 600">Checking every file…</strong><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">121 / 182</span></div>
+          <div aria-hidden="true" style="height: 6px; border-radius: 6px; background: #252522; overflow: hidden"><div style="width: 66%; height: 100%; background: #E5DCC5"></div></div>
+        </div>
+      </sc-if>
+      <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+        <div role="status" style="margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #3A3A36">
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; color: #E5DCC5"><path d="M20 6 9 17l-5-5"></path></svg>Folder checked just now</div>
+          <div class="res"><span style="color: #D9D5CA">Songs restored</span><span style="font-family: 'IBM Plex Mono', monospace">3</span></div>
+          <div class="res" style="box-shadow: inset 0 1px 0 rgba(255,255,255,.07)"><span style="color: #D9D5CA">Extra files removed</span><span style="font-family: 'IBM Plex Mono', monospace">2</span></div>
+          <div class="res" style="box-shadow: inset 0 1px 0 rgba(255,255,255,.07)"><span style="color: #D9D5CA">Still need a download</span><span style="font-family: 'IBM Plex Mono', monospace">1</span></div>
+        </div>
+      </sc-if>
+
+      <div style="margin-top: 12px; display: flex; gap: 8px">
+        <button class="btn" type="button" onClick="{{check}}" disabled="{{running}}" style="flex: 1.3; background: #F26419; color: #161615">Check Songs folder</button>
+        <a href="FolderSetup.dc.html" class="btn" style="flex: 1; color: #FFFFFF; text-decoration: none; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45)">Change folder</a>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-dl">
+      <p id="h-dl" class="cap">DOWNLOADS</p>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 3px"><span id="l-data" style="font-size: 15px; font-weight: 600">Download synced songs over mobile data</span><span style="font-size: 13px; line-height: 1.4; color: #CCC8BC">{{dataNote}}</span></span>
+        <button class="sw" type="button" role="switch" aria-checked="{{dataChecked}}" aria-labelledby="l-data" onClick="{{toggleData}}" style="background: {{dataBg}}"><span class="knob" style="left: {{dataKnob}}; background: {{dataKnobBg}}"></span></button>
+      </div>
+      <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.4; color: #CCC8BC">Downloads also pause when less than 1 GB of storage is free.</p>
+    </section>
+
+    <section class="card" aria-labelledby="h-priv">
+      <p id="h-priv" class="cap">PRIVACY</p>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 3px"><span id="l-crash" style="font-size: 15px; font-weight: 600">Send crash reports</span><span style="font-size: 13px; line-height: 1.4; color: #CCC8BC">Never includes song names or file paths.</span></span>
+        <button class="sw" type="button" role="switch" aria-checked="{{crashChecked}}" aria-labelledby="l-crash" onClick="{{toggleCrash}}" style="background: {{crashBg}}"><span class="knob" style="left: {{crashKnob}}; background: {{crashKnobBg}}"></span></button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-about">
+      <p id="h-about" class="cap">ABOUT</p>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+        <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">Song Sleeve for Android</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #CCC8BC">Version [X.Y.Z]</span></span>
+        <button class="btn" type="button" style="background: #3A3A36; color: #FFFFFF; min-height: 44px">Check for updates</button>
+      </div>
+    </section>
+  </div>
+
+  <sc-if value="{{prompt}}" hint-placeholder-val="{{ false }}">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(22,22,21,.75)"></div>
+    <section role="alertdialog" aria-modal="true" aria-labelledby="cl-t" style="position: absolute; left: 20px; right: 20px; top: 300px; padding: 22px; border-radius: 24px; background: #4C4C47; box-shadow: 0 40px 60px -20px rgba(0,0,0,.9)">
+      <span aria-hidden="true" style="width: 48px; height: 48px; border-radius: 16px; background: #F26419; color: #161615; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg></span>
+      <h2 id="cl-t" style="margin: 14px 0 0; font-size: 19px; line-height: 1.35; font-weight: 700">Song Sleeve found 27 files that aren't synced songs. Delete them permanently?</h2>
+      <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px">
+        <button class="btn" type="button" onClick="{{closePrompt}}" style="background: #F26419; color: #161615">Delete</button>
+        <button class="btn" type="button" onClick="{{closePrompt}}" style="background: transparent; color: #FFFFFF; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45)">Keep for now</button>
+      </div>
+    </section>
+  </sc-if>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"check":{"editor":"enum","options":["idle","running","done","largeCleanup"],"default":"done"},"$preview":{"width":390,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { check: null, data: false, crash: true };
+  }
+  renderVals() {
+    const st = this.state;
+    const c = st.check ?? this.props.check ?? 'done';
+    const sw = (on) => ({ bg: on ? '#E5DCC5' : '#6E6E67', knob: on ? '24px' : '4px', knobBg: on ? '#161615' : '#FFFFFF', checked: on ? 'true' : 'false' });
+    const d = sw(st.data);
+    const k = sw(st.crash);
+    return {
+      running: c === 'running',
+      done: c === 'done',
+      prompt: c === 'largeCleanup',
+      check: () => this.setState({ check: 'done' }),
+      closePrompt: () => this.setState({ check: 'idle' }),
+      dataNote: st.data ? 'On: synced songs also download over mobile data.' : 'Off: synced songs download on Wi-Fi only.',
+      dataBg: d.bg, dataKnob: d.knob, dataKnobBg: d.knobBg, dataChecked: d.checked,
+      crashBg: k.bg, crashKnob: k.knob, crashKnobBg: k.knobBg, crashChecked: k.checked,
+      toggleData: () => this.setState({ data: !this.state.data }),
+      toggleCrash: () => this.setState({ crash: !this.state.crash })
+    };
+  }
+}
+</script>
+</body>
+</html>

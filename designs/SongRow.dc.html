@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Song row</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+.sr-a:focus-visible,.sr-b:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.sr-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.01em;white-space:nowrap;flex:none;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+</style>
+</helmet>
+<div style="position: relative; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 8px; min-height: 64px; padding: 6px 4px 6px {{padL}}; border-radius: 14px; overflow: hidden; background: #4C4C47; box-shadow: {{ring}}; font-family: 'Instrument Sans', sans-serif; color: #FFFFFF">
+  <sc-if value="{{grip}}" hint-placeholder-val="{{ true }}">
+    <button class="sr-b" type="button" aria-label="Reorder {{name}}" style="width: 30px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #ADA99E; cursor: grab; border-radius: 8px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px"><circle class="f" cx="9" cy="6" r="1.5"></circle><circle class="f" cx="15" cy="6" r="1.5"></circle><circle class="f" cx="9" cy="12" r="1.5"></circle><circle class="f" cx="15" cy="12" r="1.5"></circle><circle class="f" cx="9" cy="18" r="1.5"></circle><circle class="f" cx="15" cy="18" r="1.5"></circle></svg></button>
+  </sc-if>
+  <span aria-hidden="true" style="width: 44px; height: 44px; flex: none; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: {{thBg}}; color: {{thFg}}; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08)">
+    <sc-if value="{{playing}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M6 18V10"></path><path d="M10 18V5"></path><path d="M14 18v-9"></path><path d="M18 18v-5"></path></svg></sc-if>
+    <sc-if value="{{notPlaying}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></sc-if>
+  </span>
+  <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+    <a class="sr-a" href="Playing.dc.html" style="font-size: 15px; font-weight: 600; color: {{nameColor}}; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{name}}<sc-if value="{{playing}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)"> (now playing)</span></sc-if></a>
+    <span style="display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden">
+      <sc-if value="{{showBadge}}" hint-placeholder-val="{{ true }}">
+        <span class="sr-badge" style="background: {{bBg}}; color: {{bFg}}; box-shadow: {{bRing}}">
+          <sc-if value="{{ic.device}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 12px; height: 12px; stroke-width: 2.4"><rect x="6" y="2" width="12" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></sc-if>
+          <sc-if value="{{ic.clock}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 12px; height: 12px; stroke-width: 2.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></sc-if>
+          <sc-if value="{{ic.up}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 12px; height: 12px; stroke-width: 2.4"><path d="M12 13v8"></path><path d="m8 17 4-4 4 4"></path><path d="M20.4 15.6A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.3"></path></svg></sc-if>
+          <sc-if value="{{ic.down}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 12px; height: 12px; stroke-width: 2.4"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg></sc-if>
+          <sc-if value="{{ic.alert}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 12px; height: 12px; stroke-width: 2.4"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg></sc-if>
+          <sc-if value="{{ic.link}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 12px; height: 12px; stroke-width: 2.4"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"></path></svg></sc-if>
+          <sc-if value="{{ic.lock}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 12px; height: 12px; stroke-width: 2.4"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></sc-if>
+          {{label}}
+        </span>
+      </sc-if>
+      <sc-if value="{{hasArtist}}" hint-placeholder-val="{{ true }}">
+        <a class="sr-a" href="{{artistHref}}" style="font-size: 13px; color: #D9D5CA; text-decoration: underline; text-decoration-color: rgba(217,213,202,.35); text-underline-offset: 3px; overflow: hidden; text-overflow: ellipsis">{{artist}}</a>
+      </sc-if>
+    </span>
+  </span>
+  <sc-if value="{{isSynced}}" hint-placeholder-val="{{ false }}">
+    <span role="img" aria-label="Synced" style="display: flex; color: #CCC8BC; flex: none"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path><path d="m9 14 2 2 4-4"></path></svg></span>
+  </sc-if>
+  <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #CCC8BC; flex: none">{{dur}}</span>
+  <a class="sr-a" href="{{menuHref}}" aria-label="More actions for {{name}}" style="width: 40px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: #FFFFFF; border-radius: 10px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle class="f" cx="5" cy="12" r="1.7"></circle><circle class="f" cx="12" cy="12" r="1.7"></circle><circle class="f" cx="19" cy="12" r="1.7"></circle></svg></a>
+  <sc-if value="{{showBar}}" hint-placeholder-val="{{ false }}">
+    <span aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #252522"><span style="display: block; height: 100%; width: {{pctW}}; background: #E5DCC5"></span></span>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"item":{"editor":null},"status":{"editor":"enum","options":["synced","local","queued","syncing","updating","waiting","downloading","needsDownload","pendingApply","failed","attention","relink","changed","denied"],"default":"local"},"grip":{"editor":"boolean","default":true},"$preview":{"width":366,"height":64}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const it = this.props.item ?? { name: 'Rehearsal take 3', artist: '', dur: '2:41', status: this.props.status ?? 'local', pct: 42 };
+    const st = it.status ?? 'synced';
+    const pct = it.pct ?? 0;
+    const S = {
+      synced: ['Synced', 'quiet', 'up'],
+      local: ['On this device', 'outline', 'device'],
+      queued: ['Queued', 'progress', 'clock'],
+      syncing: ['Syncing… ' + pct + '%', 'progress', 'up'],
+      updating: ['Updating audio… ' + pct + '%', 'progress', 'up'],
+      waiting: ['Waiting for another sync operation', 'progress', 'clock'],
+      downloading: ['Downloading ' + pct + '%', 'progress', 'down'],
+      needsDownload: ['Needs download', 'alert', 'down'],
+      pendingApply: ['Update after playback', 'progress', 'clock'],
+      failed: ['Sync failed', 'alert', 'alert'],
+      attention: ['Needs attention', 'alert', 'alert'],
+      relink: ['Relink needed', 'alert', 'link'],
+      changed: ['File changed', 'alert', 'alert'],
+      denied: ['Access lost', 'alert', 'lock']
+    };
+    const [label, kind, icon] = S[st] ?? S.synced;
+    const K = {
+      outline: { bg: 'transparent', fg: '#EDEAE2', ring: 'inset 0 0 0 1px rgba(255,255,255,.35)' },
+      progress: { bg: '#3A3A36', fg: '#E5DCC5', ring: 'none' },
+      alert: { bg: '#E5DCC5', fg: '#161615', ring: 'none' },
+      quiet: { bg: 'transparent', fg: '#CCC8BC', ring: 'none' }
+    }[kind];
+    const p = !!it.playing;
+    const grip = it.grip ?? this.props.grip ?? true;
+    const ic = {};
+    ['device', 'clock', 'up', 'down', 'alert', 'link', 'lock'].forEach((k) => { ic[k] = k === icon; });
+    return {
+      name: it.name,
+      artist: it.artist,
+      hasArtist: !!it.artist,
+      artistHref: it.artistHref ?? 'Artist.dc.html',
+      menuHref: it.menuHref ?? 'SongMenu.dc.html',
+      dur: it.dur,
+      grip,
+      padL: grip ? '0px' : '10px',
+      playing: p,
+      notPlaying: !p,
+      nameColor: p ? '#E5DCC5' : '#FFFFFF',
+      thBg: p ? '#E5DCC5' : '#3A3A36',
+      thFg: p ? '#161615' : '#E5DCC5',
+      ring: p ? 'inset 0 0 0 1.5px #E5DCC5' : 'inset 0 1px 0 rgba(255,255,255,.06)',
+      isSynced: st === 'synced',
+      showBadge: st !== 'synced',
+      label,
+      ic,
+      bBg: K.bg, bFg: K.fg, bRing: K.ring,
+      showBar: ['syncing', 'updating', 'downloading'].includes(st),
+      pctW: pct + '%'
+    };
+  }
+}
+</script>
+</body>
+</html>

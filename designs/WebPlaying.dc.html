@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Playing · desktop and web</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#4C4C47}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.f{fill:currentColor;stroke:none}
+.rb{width:48px;height:48px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;background:#2D2D2A;color:#FFFFFF;box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 16px -8px rgba(0,0,0,.7);text-decoration:none;cursor:pointer;flex:none}
+.db{position:absolute;width:56px;height:56px;border-radius:50%;border:0;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.db:disabled,.play:disabled{cursor:not-allowed}
+.play{position:absolute;left:50%;top:50%;width:104px;height:104px;margin:-52px 0 0 -52px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:2px solid #E5DCC5;outline-offset:3px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.mi{display:flex;align-items:center;gap:12px;min-height:46px;padding:0 14px;border-radius:10px;color:#FFFFFF;font-size:15px;text-decoration:none}
+.mi:hover{background:#4C4C47}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; background: #4C4C47; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; padding: 24px clamp(16px, 4vw, 56px) 40px">
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+    <a class="rb" href="WebSongs.dc.html" aria-label="Close player and go back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></a>
+    <div style="text-align: center">
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .16em; color: #CCC8BC">PLAYING FROM</div>
+      <a href="WebPlaylist.dc.html" style="display: inline-block; margin-top: 2px; font-size: 16px; font-weight: 600; color: #FFFFFF; text-underline-offset: 3px">{{source}}</a>
+    </div>
+    <div style="position: relative">
+      <button class="rb" type="button" onClick="{{toggleMenu}}" aria-haspopup="menu" aria-expanded="{{menuExpanded}}" aria-label="Song actions"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle class="f" cx="5" cy="12" r="1.7"></circle><circle class="f" cx="12" cy="12" r="1.7"></circle><circle class="f" cx="19" cy="12" r="1.7"></circle></svg></button>
+      <sc-if value="{{menuOpen}}" hint-placeholder-val="{{ false }}">
+        <div role="menu" aria-label="Song actions" style="position: absolute; right: 0; top: 58px; z-index: 5; width: 250px; padding: 6px; border-radius: 16px; background: #3A3A36; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 24px 40px -14px rgba(0,0,0,.9)">
+          <a class="mi" role="menuitem" href="WebEditSong.dc.html">Edit</a>
+          <a class="mi" role="menuitem" href="WebSongMenu.dc.html">Add to playlist</a>
+          <a class="mi" role="menuitem" href="WebUpdateSource.dc.html">Replace audio file</a>
+          <div aria-hidden="true" style="height: 1px; margin: 4px 10px; background: rgba(255,255,255,.08)"></div>
+          <a class="mi" role="menuitem" href="WebDeleteSong.dc.html">Delete song</a>
+        </div>
+      </sc-if>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 40px 72px; margin-top: 28px">
+    <div role="img" aria-label="Cover placeholder" style="position: relative; width: min(440px, 100%); aspect-ratio: 1 / 1; border-radius: 26px; background: #2D2D2A; color: {{coverIcon}}; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 50px 70px -30px rgba(0,0,0,.9)">
+      <span style="position: absolute; inset: 22px; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14)"></span>
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 96px; height: 96px; stroke-width: 1.5"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+    </div>
+
+    <div style="flex: 0 1 460px; min-width: 0; display: flex; flex-direction: column; align-items: stretch">
+      <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 44px; letter-spacing: -0.02em; line-height: 1.05">{{title}}</h1>
+      <sc-if value="{{hasSong}}" hint-placeholder-val="{{ true }}">
+        <a href="WebArtists.dc.html" style="align-self: flex-start; margin-top: 8px; font-size: 18px; color: #D9D5CA; text-decoration: underline; text-decoration-color: rgba(217,213,202,.35); text-underline-offset: 4px">Marina Okafor</a>
+      </sc-if>
+      <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+        <p style="margin: 10px 0 0; font-size: 16px; color: #CCC8BC">Choose a song from your library to start playing.</p>
+      </sc-if>
+
+      <sc-if value="{{updated}}" hint-placeholder-val="{{ false }}">
+        <p role="status" style="margin: 18px 0 0; display: flex; gap: 8px; padding: 12px 14px; border-radius: 12px; background: #3A3A36; font-size: 14px; line-height: 1.4; color: #EDEAE2"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; margin-top: 1px; color: #E5DCC5"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>This song was updated. Changes will be applied after playback finishes.</p>
+      </sc-if>
+      <div style="margin-top: 26px">
+        <sc-if value="{{loading}}" hint-placeholder-val="{{ false }}">
+          <div role="status" style="display: flex; flex-direction: column; gap: 8px">
+            <div aria-hidden="true" style="height: 8px; border-radius: 8px; background: #252522; overflow: hidden"><div style="width: 62%; height: 100%; background: repeating-linear-gradient(-45deg, #E5DCC5 0 8px, #CDC2A6 8px 16px)"></div></div>
+            <div style="display: flex; justify-content: space-between; font-size: 14px; color: #D9D5CA"><span>Web only: downloading the whole song before it plays…</span><span style="font-family: 'IBM Plex Mono', monospace">5.5 / 8.9 MB</span></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px"><p style="margin: 0; font-size: 13px; color: #CCC8BC">Picking another song cancels this download.</p><button type="button" style="min-height: 40px; padding: 0 14px; border-radius: 12px; border: 0; background: transparent; color: #FFFFFF; font: 600 14px 'Instrument Sans', sans-serif; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45); cursor: pointer">Cancel</button></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{showSeek}}" hint-placeholder-val="{{ true }}">
+          <label for="seek" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Seek</label>
+          <div style="position: relative; height: 24px; display: flex; align-items: center">
+            <div aria-hidden="true" style="position: absolute; left: 0; right: 0; height: 8px; border-radius: 8px; background: #252522"></div>
+            <div aria-hidden="true" style="position: absolute; left: 0; width: {{pct}}; height: 8px; border-radius: 8px; background: #E5DCC5"></div>
+            <div aria-hidden="true" style="position: absolute; left: {{pct}}; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 0 0 4px rgba(229,220,197,.35), 0 3px 6px rgba(0,0,0,.5)"></div>
+            <input id="seek" type="range" min="0" max="232" value="84" disabled="{{empty}}" style="position: absolute; inset: 0; width: 100%; opacity: 0; margin: 0; cursor: pointer">
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #D9D5CA"><span>{{elapsed}}</span><span>{{total}}</span></div>
+        </sc-if>
+      </div>
+
+      <div style="margin: 30px auto 0; position: relative; width: 260px; height: 260px; border-radius: 50%; background: #3A3A36; box-shadow: inset 0 6px 16px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.07)">
+        <button class="db" type="button" onClick="{{toggleShuffle}}" aria-pressed="{{shPressed}}" aria-label="Shuffle" disabled="{{off}}" style="left: 102px; top: 8px; color: {{shColor}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"></path><path d="M4 20 21 3"></path><path d="M21 16v5h-5"></path><path d="m15 15 6 6"></path><path d="M4 4l5 5"></path></svg></button>
+        <button class="db" type="button" aria-label="Previous song" disabled="{{off}}" style="left: 8px; top: 102px; color: {{ctl}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 28px; height: 28px"><path class="f" d="M19 20 9 12l10-8v16z"></path><path d="M5 19V5" style="stroke-width: 2.4"></path></svg></button>
+        <button class="db" type="button" aria-label="Next song" disabled="{{off}}" style="right: 8px; top: 102px; color: {{ctl}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 28px; height: 28px"><path class="f" d="m5 4 10 8-10 8V4z"></path><path d="M19 5v14" style="stroke-width: 2.4"></path></svg></button>
+        <button class="db" type="button" onClick="{{toggleRepeat}}" aria-pressed="{{rpPressed}}" aria-label="Repeat current song" disabled="{{off}}" style="left: 102px; bottom: 8px; color: {{rpColor}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path><path d="M11 10h1v4"></path></svg></button>
+        <button class="play" type="button" onClick="{{togglePlay}}" aria-label="{{ppLabel}}" disabled="{{noPlay}}" style="background: {{ppBg}}; color: {{ppFg}}; box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 14px 24px -10px rgba(0,0,0,.8)">
+          <sc-if value="{{showPause}}" hint-placeholder-val="{{ true }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 36px; height: 36px"><rect class="f" x="6" y="4" width="4" height="16" rx="1"></rect><rect class="f" x="14" y="4" width="4" height="16" rx="1"></rect></svg></sc-if>
+          <sc-if value="{{showPlay}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 36px; height: 36px; margin-left: 4px"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg></sc-if>
+        </button>
+      </div>
+      <div style="margin-top: 16px; display: flex; justify-content: center; gap: 8px">
+        <span class="pill" style="background: {{shPillBg}}; color: {{shPillFg}}">Shuffle {{shText}}</span>
+        <span class="pill" style="background: {{rpPillBg}}; color: {{rpPillFg}}">Repeat song {{rpText}}</span>
+      </div>    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["ready","updated","webLoading","empty"],"default":"ready"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { playing: true, shuffle: true, repeat: false, menu: false };
+  }
+  renderVals() {
+    const v = this.props.variant ?? 'ready';
+    const empty = v === 'empty';
+    const loading = v === 'webLoading';
+    const updated = v === 'updated';
+    const st = this.state;
+    const sh = st.shuffle && !empty;
+    const rp = st.repeat && !empty;
+    const playing = st.playing && (v === 'ready' || v === 'updated');
+    const pill = (on) => ({ bg: on ? '#E5DCC5' : '#3A3A36', fg: on ? '#161615' : '#CCC8BC' });
+    const dim = '#75736C';
+    return {
+      source: empty ? 'Nothing queued' : 'Sunday Drive',
+      title: empty ? 'Nothing playing' : 'Harbor Lights',
+      hasSong: !empty,
+      empty,
+      loading,
+      updated,
+      showSeek: !loading,
+      pct: empty ? '0%' : '36%',
+      elapsed: empty ? '0:00' : '1:24',
+      total: empty ? '--:--' : '3:52',
+      coverIcon: empty ? '#8E8B82' : '#E5DCC5',
+      off: empty,
+      noPlay: empty || loading,
+      ctl: empty ? dim : '#FFFFFF',
+      shColor: empty ? dim : (sh ? '#E5DCC5' : '#FFFFFF'),
+      rpColor: empty ? dim : (rp ? '#E5DCC5' : '#FFFFFF'),
+      shPressed: sh ? 'true' : 'false',
+      rpPressed: rp ? 'true' : 'false',
+      shText: sh ? 'on' : 'off',
+      rpText: rp ? 'on' : 'off',
+      shPillBg: pill(sh).bg, shPillFg: pill(sh).fg,
+      rpPillBg: pill(rp).bg, rpPillFg: pill(rp).fg,
+      ppBg: empty || loading ? '#5A5A54' : '#F26419',
+      ppFg: empty || loading ? '#8E8B82' : '#161615',
+      showPause: playing,
+      showPlay: !playing,
+      ppLabel: playing ? 'Pause' : 'Play',
+      menuOpen: st.menu,
+      menuExpanded: st.menu ? 'true' : 'false',
+      toggleMenu: () => this.setState({ menu: !this.state.menu }),
+      togglePlay: () => this.setState({ playing: !this.state.playing }),
+      toggleShuffle: () => this.setState({ shuffle: !this.state.shuffle }),
+      toggleRepeat: () => this.setState({ repeat: !this.state.repeat })
+    };
+  }
+}
+</script>
+</body>
+</html>

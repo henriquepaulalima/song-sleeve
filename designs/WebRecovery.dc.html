@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Password recovery and reset</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.in{width:100%;box-sizing:border-box;min-height:52px;padding:0 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.22);background:#3A3A36;color:#FFFFFF;font:400 16px 'Instrument Sans',sans-serif;outline:none}
+.in::placeholder{color:#ADA99E}
+.p{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;border-radius:16px;border:0;background:#F26419;color:#161615;font:700 16px 'Instrument Sans',sans-serif;text-decoration:none;cursor:pointer}
+.s{display:flex;align-items:center;justify-content:center;width:100%;min-height:50px;border-radius:16px;border:0;background:transparent;color:#FFFFFF;font:600 15px 'Instrument Sans',sans-serif;text-decoration:none;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45);cursor:pointer}
+.lbl{font-size:14px;font-weight:600}
+.rule{display:flex;align-items:center;gap:8px;font-size:13px;color:#FFFFFF}
+.ico{width:60px;height:60px;border-radius:18px;background:#3A3A36;color:#E5DCC5;display:flex;align-items:center;justify-content:center}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; background: #2D2D2A; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; padding: 28px clamp(16px, 5vw, 72px) 48px">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; background: #4C4C47; position: relative; overflow: hidden; display: block"><span style="position: absolute; right: -9px; top: 6px; width: 20px; height: 20px; border-radius: 50%; background: #F26419; box-shadow: 0 0 0 5px #161615"></span></span>
+      <span style="font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 20px; letter-spacing: -0.02em">Song Sleeve</span>
+    </div>
+    <span style="padding: 5px 11px; border-radius: 999px; background: #3A3A36; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .12em; color: #CCC8BC">{{where}}</span>
+  </div>
+  <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding-top: 24px">
+    <section aria-labelledby="t" style="width: 100%; max-width: 480px; box-sizing: border-box; padding: clamp(24px, 4vw, 40px); border-radius: 28px; background: #4C4C47; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 40px 60px -30px rgba(0,0,0,.85)">
+
+      <sc-if value="{{request}}" hint-placeholder-val="{{ true }}">
+        <span class="ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24" style="width: 28px; height: 28px"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></span>
+        <h1 id="t" style="margin: 18px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 30px; letter-spacing: -0.02em">Forgot password?</h1>
+        <p style="margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Enter your account email. We'll send a link to set a new password.</p>
+        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px"><label class="lbl" for="em">Email</label><input class="in" id="em" type="email" placeholder="you@example.com"></div>
+        <div style="margin-top: 22px; display: flex; flex-direction: column; gap: 8px"><button class="p" type="button" onClick="{{go.sent}}">Send reset link</button><a class="s" href="WebAuth.dc.html">Back to log in</a></div>
+      </sc-if>
+
+      <sc-if value="{{sent}}" hint-placeholder-val="{{ false }}">
+        <span class="ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24" style="width: 28px; height: 28px"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-10 6L2 7"></path></svg></span>
+        <h1 id="t" style="margin: 18px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 30px; letter-spacing: -0.02em">Check your email</h1>
+        <p role="status" style="margin: 8px 0 0; font-size: 16px; line-height: 1.5">If an account exists for that email, we sent a link to reset your password.</p>
+        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.5; color: #D9D5CA">The link works for 30 minutes. Setting a new password signs you out on every device.</p>
+        <div style="margin-top: 22px"><a class="s" href="WebAuth.dc.html">Back to log in</a></div>
+      </sc-if>
+
+      <sc-if value="{{checking}}" hint-placeholder-val="{{ false }}">
+        <div role="status" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 0; text-align: center">
+          <span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 4px #3A3A36; position: relative"><span style="position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 4px 0 0 0 #E5DCC5, inset 0 4px 0 0 #E5DCC5"></span></span>
+          <h1 id="t" style="margin: 0; font-size: 20px; font-weight: 700">Checking your link…</h1>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{newPw}}" hint-placeholder-val="{{ false }}">
+        <h1 id="t" style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 30px; letter-spacing: -0.02em">Set a new password</h1>
+        <p style="margin: 8px 0 0; font-size: 15px; color: #D9D5CA">For alex@example.com</p>
+        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px">
+          <label class="lbl" for="np">New password</label>
+          <input class="in" id="np" type="password" value="saltwater-hymn" readonly aria-describedby="np-rules">
+          <ul id="np-rules" style="list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+            <li class="rule"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 50%; background: #E5DCC5; color: #161615; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 12px; height: 12px; stroke-width: 3"><path d="M20 6 9 17l-5-5"></path></svg></span>10 to 128 characters, any kind</li>
+            <li class="rule"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 50%; background: #E5DCC5; color: #161615; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 12px; height: 12px; stroke-width: 3"><path d="M20 6 9 17l-5-5"></path></svg></span>Not one of the most common passwords</li>
+          </ul>
+        </div>
+        <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px"><label class="lbl" for="cp">Confirm new password</label><input class="in" id="cp" type="password" value="saltwater-hymn" readonly></div>
+        <div style="margin-top: 22px"><button class="p" type="button" onClick="{{go.success}}">Change password</button></div>
+      </sc-if>
+
+      <sc-if value="{{success}}" hint-placeholder-val="{{ false }}">
+        <span class="ico" aria-hidden="true" style="background: #E5DCC5; color: #161615"><svg class="i" viewBox="0 0 24 24" style="width: 28px; height: 28px; stroke-width: 2.6"><path d="M20 6 9 17l-5-5"></path></svg></span>
+        <h1 id="t" role="status" style="margin: 18px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 28px; letter-spacing: -0.02em; line-height: 1.2">Your password was changed. Log in in the Song Sleeve app.</h1>
+        <p style="margin: 10px 0 0; font-size: 14px; color: #D9D5CA">Every device was signed out.</p>
+        <sc-if value="{{allowlisted}}" hint-placeholder-val="{{ true }}"><div style="margin-top: 22px"><a class="s" href="WebAuth.dc.html">Log in on the web</a></div></sc-if>
+      </sc-if>
+
+      <sc-if value="{{expired}}" hint-placeholder-val="{{ false }}">
+        <span class="ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24" style="width: 28px; height: 28px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
+        <h1 id="t" style="margin: 18px 0 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 28px; letter-spacing: -0.02em">This link has expired or was already used</h1>
+        <p style="margin: 10px 0 0; font-size: 15px; line-height: 1.5; color: #D9D5CA">Reset links work once, for 30 minutes.</p>
+        <div style="margin-top: 22px"><button class="p" type="button" onClick="{{go.request}}">Send a new link</button></div>
+      </sc-if>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"step":{"editor":"enum","options":["request","sent","checking","newPassword","success","expired"],"default":"request"},"allowlisted":{"editor":"boolean","default":true},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: null };
+  }
+  renderVals() {
+    const step = this.state.step ?? this.props.step ?? 'request';
+    const go = {};
+    ['request', 'sent', 'success'].forEach((k) => { go[k] = () => this.setState({ step: k }); });
+    const inApp = step === 'request' || step === 'sent';
+    return {
+      go,
+      where: inApp ? 'IN THE APP' : 'WEB RESET PAGE · OPEN TO EVERY ACCOUNT',
+      request: step === 'request', sent: step === 'sent', checking: step === 'checking',
+      newPw: step === 'newPassword', success: step === 'success', expired: step === 'expired',
+      allowlisted: this.props.allowlisted ?? true
+    };
+  }
+}
+</script>
+</body>
+</html>

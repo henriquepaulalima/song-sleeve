@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Replace audio file · desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Instrument+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#2D2D2A}
+dc-import{display:block;width:100%}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+a:focus-visible,button:focus-visible{outline:2px solid #E5DCC5;outline-offset:2px}
+.lbl{font-size:13px;font-weight:600;color:#EDEAE2}
+.in{width:100%;box-sizing:border-box;min-height:48px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.18);background:#3A3A36;color:#FFFFFF;font:400 15px 'Instrument Sans',sans-serif;outline:none}
+.ch{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:58px;padding:8px 12px;border-radius:12px;border:0;color:#FFFFFF;font-family:'Instrument Sans',sans-serif;text-align:left;cursor:pointer}
+.k{font-size:11px;font-weight:700;color:#CCC8BC;letter-spacing:.04em}
+.fx{display:grid;grid-template-columns:90px 1fr 20px 1fr;align-items:center;gap:8px;min-height:44px;font-size:14px}
+.old{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#CCC8BC;text-decoration:line-through}
+.new{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; background: #2D2D2A; font-family: 'Instrument Sans', sans-serif; color: #FFFFFF">
+  <div aria-hidden="true" style="position: absolute; inset: 0"><dc-import name="WebSongs" hint-size="1440px,900px"></dc-import></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(22,22,21,.74)"></div>
+  <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center">
+    <section role="dialog" aria-modal="true" aria-labelledby="t" style="position: relative; width: 900px; box-sizing: border-box; padding: 30px 32px; border-radius: 28px; background: #4C4C47; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 50px 80px -24px rgba(0,0,0,.95)">
+      <a href="WebSongs.dc.html" aria-label="Close" style="position: absolute; right: 18px; top: 18px; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #3A3A36; color: #FFFFFF"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></a>
+      <h1 id="t" style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 118%; font-weight: 800; font-size: 28px; letter-spacing: -0.02em">Replace audio file</h1>
+      <p style="margin: 6px 0 0; font-size: 15px; color: #D9D5CA">For “{{song}}” · {{kindLabel}}</p>
+
+      <sc-if value="{{checking}}" hint-placeholder-val="{{ false }}">
+        <div role="status" style="margin-top: 24px; padding: 18px; border-radius: 16px; background: #3A3A36; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px; color: #E5DCC5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Checking your Song Sleeve folder first…</div>
+          <div aria-hidden="true" style="height: 6px; border-radius: 6px; background: #252522; overflow: hidden"><div style="width: 45%; height: 100%; background: #E5DCC5"></div></div>
+          <p style="margin: 0; font-size: 14px; color: #CCC8BC">The file picker opens when this finishes. Files inside the Song Sleeve folder can't be picked.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{review}}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top: 18px; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: #3A3A36">
+          <span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 12px; background: #E5DCC5; color: #161615; display: flex; align-items: center; justify-content: center; flex: none"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path></svg></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600">{{fileName}}</span><span style="font-size: 13px; color: #CCC8BC">{{fileWhere}}</span></span>
+          <button type="button" style="min-height: 40px; padding: 0 14px; border: 0; border-radius: 12px; background: #4C4C47; color: #FFFFFF; font: 600 14px 'Instrument Sans', sans-serif; cursor: pointer">Choose another file</button>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 24px">
+          <div style="flex: 1.3 1 380px; display: flex; flex-direction: column; gap: 16px">
+            <div role="radiogroup" aria-label="Name" style="display: flex; flex-direction: column; gap: 6px">
+              <span class="lbl">Name</span>
+              <div style="display: flex; gap: 8px">
+                <button class="ch" type="button" role="radio" aria-checked="{{n.keepC}}" onClick="{{n.keep}}" style="background: {{n.keepBg}}; box-shadow: {{n.keepRing}}"><span class="k">KEEP CURRENT</span><span style="font-size: 15px">{{n.cur}}</span></button>
+                <button class="ch" type="button" role="radio" aria-checked="{{n.useC}}" onClick="{{n.use}}" style="background: {{n.useBg}}; box-shadow: {{n.useRing}}"><span class="k">USE NEW · FROM FILE TAGS</span><span style="font-size: 15px">{{n.nw}}</span></button>
+              </div>
+              <label for="nm" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Name</label>
+              <input class="in" id="nm" type="text" value="{{n.value}}" readonly>
+            </div>
+            <div role="radiogroup" aria-label="Artist" style="display: flex; flex-direction: column; gap: 6px">
+              <span class="lbl">Artist</span>
+              <div style="display: flex; gap: 8px">
+                <button class="ch" type="button" role="radio" aria-checked="{{a.keepC}}" onClick="{{a.keep}}" style="background: {{a.keepBg}}; box-shadow: {{a.keepRing}}"><span class="k">KEEP CURRENT</span><span style="font-size: 15px">{{a.cur}}</span></button>
+                <button class="ch" type="button" role="radio" aria-checked="{{a.useC}}" onClick="{{a.use}}" style="background: {{a.useBg}}; box-shadow: {{a.useRing}}"><span class="k">USE NEW · FROM FILE TAGS</span><span style="font-size: 15px">{{a.nw}}</span></button>
+              </div>
+              <sc-if value="{{a.newPicked}}" hint-placeholder-val="{{ false }}"><p role="status" style="margin: 0; padding: 8px 12px; border-radius: 10px; background: #E5DCC5; color: #161615; font-size: 13px">Did you mean <strong>Marina Okafor</strong>?</p></sc-if>
+            </div>
+          </div>
+          <div style="flex: 1 1 280px">
+            <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .06em; color: #D9D5CA">FILE DETAILS</h2>
+            <div style="padding: 4px 14px; border-radius: 14px; background: #3A3A36">
+              <div class="fx"><span style="color: #CCC8BC">Duration</span><span class="old">3:52</span><span aria-hidden="true" style="color: #E5DCC5">→</span><span class="new">3:58</span></div>
+              <div class="fx" style="box-shadow: inset 0 1px 0 rgba(255,255,255,.07)"><span style="color: #CCC8BC">Size</span><span class="old">8.9 MB</span><span aria-hidden="true" style="color: #E5DCC5">→</span><span class="new">31.4 MB</span></div>
+              <div class="fx" style="box-shadow: inset 0 1px 0 rgba(255,255,255,.07)"><span style="color: #CCC8BC">Format</span><span class="old">MP3</span><span aria-hidden="true" style="color: #E5DCC5">→</span><span class="new">FLAC</span></div>
+            </div>
+            <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: #EDEAE2">{{after}}</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px">
+        <a href="WebSongs.dc.html" style="display: flex; align-items: center; min-height: 52px; padding: 0 22px; border-radius: 16px; color: #FFFFFF; font-weight: 600; text-decoration: none; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4)">Cancel</a>
+        <button type="button" disabled="{{checking}}" style="min-height: 52px; padding: 0 26px; border-radius: 16px; border: 0; background: {{cBg}}; color: {{cFg}}; font: 700 16px 'Instrument Sans', sans-serif; cursor: pointer">Confirm</button>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"step":{"editor":"enum","options":["folderCheck","review"],"default":"review"},"song":{"editor":"enum","options":["synced","local","relinkDifferentFile"],"default":"synced"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { name: 'use', artist: 'keep' };
+  }
+  renderVals() {
+    const song = this.props.song ?? 'synced';
+    const synced = song === 'synced';
+    const checking = synced && (this.props.step ?? 'review') === 'folderCheck';
+    const pick = (key, cur, nw) => {
+      const use = this.state[key] === 'use';
+      const on = { bg: '#3A3A36', ring: 'inset 0 0 0 2px #E5DCC5' };
+      const off = { bg: 'transparent', ring: 'inset 0 0 0 1.5px rgba(255,255,255,.2)' };
+      return {
+        cur, nw, value: use ? nw : cur, newPicked: use,
+        keepC: use ? 'false' : 'true', useC: use ? 'true' : 'false',
+        keepBg: use ? off.bg : on.bg, keepRing: use ? off.ring : on.ring,
+        useBg: use ? on.bg : off.bg, useRing: use ? on.ring : off.ring,
+        keep: () => this.setState({ [key]: 'keep' }), use: () => this.setState({ [key]: 'use' })
+      };
+    };
+    const T = {
+      synced: { song: 'Harbor Lights', kind: 'synced song', file: 'harbor-lights-remaster.flac', where: 'Downloads · readable', after: 'Nothing changes until you confirm. While the new file uploads, every device shows Updating audio… and keeps playing the current version. If anything fails, the song keeps its current audio.' },
+      local: { song: 'Rehearsal take 3', kind: 'on this computer only', file: 'rehearsal take 3 (mix 2).m4a', where: 'Music / Band · readable', after: 'The song will play from the new file, where it is now. Nothing is copied or uploaded. It keeps its place in your playlists.' },
+      relinkDifferentFile: { song: 'Undertow', kind: 'relink · this is a different file', file: 'undertow-final.mp3', where: 'Music / Albums · not the same file as before', after: 'This isn’t the file the song used before, so choose its name and artist. Nothing is copied or uploaded.' }
+    }[song];
+    return {
+      checking, review: !checking,
+      song: T.song, kindLabel: T.kind, fileName: T.file, fileWhere: T.where, after: T.after,
+      n: pick('name', T.song, song === 'synced' ? 'Harbor Lights (2026 Remaster)' : (song === 'local' ? 'Rehearsal Take 3 (Mix 2)' : 'Undertow (Final)')),
+      a: pick('artist', song === 'local' ? 'No artist' : 'Marina Okafor', 'M. Okafor'),
+      cBg: checking ? '#5A5A54' : '#F26419', cFg: checking ? '#8E8B82' : '#161615'
+    };
+  }
+}
+</script>
+</body>
+</html>
