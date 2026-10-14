@@ -1,0 +1,11 @@
+{
+  "identities": [
+    {
+      "name": "songsleeve",
+      "credentials": [
+        { "accessKey": "songsleeve", "secretKey": "songsleeve-secret" }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "song-sleeve",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "engines": { "node": ">=20.19" },
+  "scripts": {
+    "dev:web": "pnpm --filter @song-sleeve/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

@@ -1,0 +1,42 @@
+# Local development infrastructure only. Nothing here is used in staging or production.
+# Ports are offset from the defaults so they don't clash with other local services.
+name: song-sleeve
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: songsleeve
+      POSTGRES_PASSWORD: songsleeve
+      POSTGRES_DB: songsleeve
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U songsleeve"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # S3-compatible object storage standing in for the Railway bucket (§10.1).
+  # The API creates the bucket and its CORS rule at startup in development.
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024 -volume.max=0
+    ports:
+      - "58333:8333"
+    volumes:
+      - s3-data:/data
+      - ./dev/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # Catches every email locally (password reset, password changed). UI on http://localhost:58025
+  mailpit:
+    image: axllent/mailpit:v1.24
+    ports:
+      - "51025:1025"
+      - "58025:8025"
+
+volumes:
+  postgres-data:
+  s3-data:
