@@ -14,7 +14,7 @@ import (
 	"github.com/henriquepaulalima/song-sleeve/server/internal/fields"
 	"github.com/henriquepaulalima/song-sleeve/server/internal/httpx"
 	"github.com/henriquepaulalima/song-sleeve/server/internal/mutations"
-	"github.com/henriquepaulalima/song-sleeve/server/internal/position"
+	"github.com/henriquepaulalima/song-sleeve/server/pkg/position"
 )
 
 // Playlists hold songs and groups hold playlists; there is no nesting, no parents

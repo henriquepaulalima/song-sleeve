@@ -15,7 +15,7 @@ import (
 	"github.com/henriquepaulalima/song-sleeve/server/internal/fields"
 	"github.com/henriquepaulalima/song-sleeve/server/internal/httpx"
 	"github.com/henriquepaulalima/song-sleeve/server/internal/mutations"
-	"github.com/henriquepaulalima/song-sleeve/server/internal/position"
+	"github.com/henriquepaulalima/song-sleeve/server/pkg/position"
 )
 
 // Scale caps (D-33).

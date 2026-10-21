@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/henriquepaulalima/song-sleeve/server/internal/position"
+	"github.com/henriquepaulalima/song-sleeve/server/pkg/position"
 )
 
 const testPassword = "saltwater-hymn"
