@@ -27,6 +27,11 @@ export function groupPlaylists(s: CatalogState, groupId: string): Playlist[] {
     .filter((p): p is Playlist => !!p);
 }
 
+/** A group's queue: its playlists in group order, songs in playlist order, each song once. */
+export function groupQueue(s: CatalogState, groupId: string): string[] {
+  return [...new Set(groupPlaylists(s, groupId).flatMap((p) => playlistTracks(s, p.id).map((t) => t.id)))];
+}
+
 export function groupsOfPlaylist(s: CatalogState, playlistId: string): Group[] {
   return [...s.groups.values()].filter((g) => g.playlists.some((m) => m.playlist_id === playlistId));
 }
@@ -65,9 +70,27 @@ export type SongStatus =
   | { kind: 'verifying' }
   | { kind: 'updating'; pct: number }
   | { kind: 'waiting' }
-  | { kind: 'attention' };
+  | { kind: 'attention' }
+  // Local songs in installed apps (§8.2).
+  | { kind: 'local' }
+  | { kind: 'queued' }
+  | { kind: 'failed'; reason: string | null }
+  | { kind: 'relink' }
+  | { kind: 'changed' };
+
+export function isLocalTrack(t: Track | undefined): boolean {
+  return !!t?.device?.local;
+}
 
 export function songStatus(t: Track, progress?: SyncProgress): SongStatus {
+  const d = t.device;
+  if (d?.local) {
+    if (d.health === 'needs_relink' || d.health === 'access_denied') return { kind: 'relink' };
+    if (d.health === 'source_changed') return { kind: 'changed' };
+    if (d.sync_state === 'queued') return { kind: 'queued' };
+    if (d.sync_state === 'sync_failed' || d.sync_state === 'needs_attention') return { kind: 'failed', reason: d.sync_failure ?? null };
+    return { kind: 'local' };
+  }
   const op = t.operation;
   const pct = (confirmed: number, declared: number) => (declared > 0 ? Math.min(100, Math.floor((confirmed / declared) * 100)) : 0);
   if (op) {

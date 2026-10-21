@@ -1,11 +1,13 @@
 import { Link, useNavigate, useParams } from 'react-router';
 import { artistTracks, artistsByName, songCountByArtist } from '@song-sleeve/core';
 import { useDialogs } from '../app/dialogs';
-import { useCatalog, useCatalogSelect, usePlayer } from '../app/hooks';
+import { useCatalog, useCatalogSelect, useCurrentTrackId } from '../app/hooks';
 import { useT } from '../app/i18n';
 import { player } from '../app/services';
 import { EmptyState } from '../components/common';
 import { Icon } from '../components/Icon';
+import { AddSongsButton, PageHeader } from '../components/PageHeader';
+import { SyncControl } from '../components/SyncControl';
 import { IncrementalList } from '../components/ReorderableList';
 import { SongRow, songColumns } from '../components/SongRow';
 
@@ -16,7 +18,7 @@ export default function Artists() {
   const dialogs = useDialogs();
   const { id } = useParams();
   const s = useCatalog();
-  const nowPlaying = usePlayer().current?.id;
+  const nowPlaying = useCurrentTrackId();
   const artists = useCatalogSelect((st) => artistsByName(st));
   const counts = useCatalogSelect((st) => songCountByArtist(st));
   const selected = (id && s.artists.get(id)) || artists[0];
@@ -25,7 +27,7 @@ export default function Artists() {
   if (artists.length === 0) {
     return (
       <>
-        <h1 className="page-title">{t('artists.title')}</h1>
+        <PageHeader title={t('artists.title')} sub={t('count.artists', { n: 0 })} actions={headerActions(undefined)} />
         <EmptyState icon="artist" title={t('artists.empty')} body={t('artists.emptyBody')} />
       </>
     );
@@ -36,8 +38,8 @@ export default function Artists() {
 
   return (
     <>
-      <h1 className="page-title">{t('artists.title')}</h1>
-      <p className="page-sub">{t('count.artists', { n: artists.length })}</p>
+      {/* Add songs fills in the selected artist; the switch is the library's (no per-artist scope). */}
+      <PageHeader title={t('artists.title')} sub={t('count.artists', { n: artists.length })} actions={headerActions(selected?.id)} />
       <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
         <ul aria-label={t('artists.title')} style={{ flex: '1 1 260px', maxWidth: '100%', listStyle: 'none', margin: 0, padding: 8, borderRadius: 20, background: 'var(--well)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: '70vh', overflowY: 'auto' }}>
           {artists.map((a) => {
@@ -127,6 +129,15 @@ export default function Artists() {
           </section>
         )}
       </div>
+    </>
+  );
+}
+
+function headerActions(artistId: string | undefined) {
+  return (
+    <>
+      <SyncControl spec={{ scope: 'library' }} />
+      <AddSongsButton artistId={artistId} />
     </>
   );
 }

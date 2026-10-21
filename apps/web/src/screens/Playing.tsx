@@ -1,8 +1,9 @@
 import { Link, useNavigate } from 'react-router';
-import { formatBytes } from '@song-sleeve/core';
+import { formatBytes, sourceHref } from '@song-sleeve/core';
 import { useCatalog, usePlayer } from '../app/hooks';
 import { useI18n } from '../app/i18n';
 import { player } from '../app/services';
+import { closeFull, tipFor } from '../app/shortcuts';
 import { Icon } from '../components/Icon';
 import { SeekBar } from '../components/PlayerBar';
 import { SongMenuButton, statusView } from '../components/SongRow';
@@ -20,14 +21,11 @@ export default function Playing() {
   const cur = s.current;
   const track = cur ? cat.tracks.get(cur.id) : undefined;
   const artistId = track?.artist_id;
-  const sourceHref = s.source?.kind === 'playlist' ? `/playlists/${s.source.id}` : s.source?.kind === 'artist' ? `/artists/${s.source.id}` : '/songs';
   const lp = s.loadProgress;
   return (
     <div className="player-page">
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <button type="button" className="round-btn" aria-label={t('playing.close')} onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/songs'))}>
-          <Icon name="chevronDown" />
-        </button>
+        <span style={{ width: 48 }} />
         <div style={{ textAlign: 'center', minWidth: 0 }}>
           <div className="kicker" style={{ color: 'var(--muted-2)' }}>
             {t('playing.from')}
@@ -35,7 +33,7 @@ export default function Playing() {
           {empty ? (
             <span style={{ display: 'inline-block', marginTop: 2, fontSize: 16, fontWeight: 600 }}>{t('playing.nothingQueued')}</span>
           ) : (
-            <Link to={sourceHref} className="ellipsis" style={{ display: 'inline-block', marginTop: 2, fontSize: 16, fontWeight: 600, color: 'var(--white)', textUnderlineOffset: 3, maxWidth: '60vw' }}>
+            <Link to={sourceHref(s.source)} className="ellipsis" style={{ display: 'inline-block', marginTop: 2, fontSize: 16, fontWeight: 600, color: 'var(--white)', textUnderlineOffset: 3, maxWidth: '60vw' }}>
               {s.source?.label ?? t('source.library')}
             </Link>
           )}
@@ -100,28 +98,27 @@ export default function Playing() {
           </div>
 
           <div className="dial">
-            <button type="button" className={'db' + (s.shuffle && !empty ? ' toggle-on' : '')} style={{ left: 102, top: 8 }} aria-pressed={s.shuffle} aria-label={t('player.shuffle')} disabled={empty} onClick={() => player.setShuffle(!s.shuffle)}>
+            <button type="button" className={'db' + (s.shuffle && !empty ? ' toggle-on' : '')} style={{ left: 102, top: 8 }} aria-pressed={s.shuffle} aria-label={t('player.shuffle')} data-tip={tipFor('shuffle', t)} disabled={empty} onClick={() => player.setShuffle(!s.shuffle)}>
               <Icon name="shuffle" />
             </button>
-            <button type="button" className="db" style={{ left: 8, top: 102 }} aria-label={t('player.previous')} disabled={empty} onClick={() => void player.previous()}>
+            <button type="button" className="db" style={{ left: 8, top: 102 }} aria-label={t('player.previous')} data-tip={tipFor('previous', t)} disabled={empty} onClick={() => void player.previous()}>
               <Icon name="prev" size={28} />
             </button>
-            <button type="button" className="db" style={{ right: 8, top: 102 }} aria-label={t('player.next')} disabled={empty || !player.hasNext()} onClick={() => void player.next()}>
+            <button type="button" className="db" style={{ right: 8, top: 102 }} aria-label={t('player.next')} data-tip={tipFor('next', t)} disabled={empty || !player.hasNext()} onClick={() => void player.next()}>
               <Icon name="next" size={28} />
             </button>
-            <button type="button" className={'db' + (s.repeatOne && !empty ? ' toggle-on' : '')} style={{ left: 102, bottom: 8 }} aria-pressed={s.repeatOne} aria-label={t('player.repeat')} disabled={empty} onClick={() => player.toggleRepeat()}>
+            <button type="button" className={'db' + (s.repeatOne && !empty ? ' toggle-on' : '')} style={{ left: 102, bottom: 8 }} aria-pressed={s.repeatOne} aria-label={t('player.repeat')} data-tip={tipFor('repeat', t)} data-tip-pos="below" disabled={empty} onClick={() => player.toggleRepeat()}>
               <Icon name="repeatOne" />
             </button>
-            <button type="button" className="pp" aria-label={playing ? t('player.pause') : t('player.play')} disabled={empty || loading} onClick={() => void player.toggle()}>
-              {playing ? <Icon name="pause" size={36} /> : <Icon name="play" size={36} style={{ marginLeft: 4 }} />}
+            <button type="button" className="pp" aria-label={playing ? t('player.pause') : t('player.play')} data-tip={tipFor('playPause', t, playing ? t('player.pause') : t('player.play'))} disabled={empty || loading} onClick={() => void player.toggle()}>
+              {playing ? <Icon name="pause" size={36} /> : <Icon name="play" size={36} />}
             </button>
-          </div>
-          <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
-            <span className={'mode-pill' + (s.shuffle && !empty ? ' on' : '')}>{t('playing.shuffleState', { state: s.shuffle && !empty ? t('playing.on') : t('playing.off') })}</span>
-            <span className={'mode-pill' + (s.repeatOne && !empty ? ' on' : '')}>{t('playing.repeatState', { state: s.repeatOne && !empty ? t('playing.on') : t('playing.off') })}</span>
           </div>
         </div>
       </div>
+      <button type="button" className="icon-btn pbar-expand player-min" aria-label={t('playing.close')} data-tip={tipFor('closeFull', t, t('playing.close'))} data-tip-align="end" onClick={() => closeFull(navigate)}>
+        <Icon name="collapse" size={18} />
+      </button>
     </div>
   );
 }

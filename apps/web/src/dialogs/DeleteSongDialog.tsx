@@ -23,6 +23,8 @@ export default function DeleteSongDialog({ trackId, onClose }: { trackId: string
   const [error, setError] = useState<string | null>(null);
   if (!track) return null;
   const syncing = track.state === 'pending_upload';
+  const local = !!track.device?.local;
+  const kind = local ? 'Local' : syncing ? 'Syncing' : 'Synced';
   const status = statusView(songStatus(track, cat.progress.get(track.id)), t);
 
   const confirm = async () => {
@@ -53,12 +55,12 @@ export default function DeleteSongDialog({ trackId, onClose }: { trackId: string
         <StatusBadge label={status.label} kind={status.kind} icon={status.icon} />
       </div>
       <h1 id="del-song-t" className="dialog-title" style={{ marginTop: 10, fontSize: 26, fontStretch: '112%', padding: 0 }}>
-        {syncing ? t('delete.titleSyncing', { name: track.name }) : t('delete.titleSynced', { name: track.name })}
+        {t(`delete.title${kind}`, { name: track.name })}
       </h1>
       <p id="del-song-d" style={{ margin: '12px 0 0', fontSize: 16, lineHeight: 1.5, color: 'var(--text-soft)' }}>
-        {syncing ? t('delete.bodySyncing') : t('delete.bodySynced')}
+        {t(`delete.body${kind}`)}
       </p>
-      <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--muted-2)' }}>{syncing ? t('delete.footSyncing') : t('delete.footSynced')}</p>
+      <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--muted-2)' }}>{t(`delete.foot${kind}`)}</p>
       {error && (
         <div style={{ marginTop: 12 }}>
           <Alert>{error}</Alert>

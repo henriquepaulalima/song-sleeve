@@ -41,10 +41,41 @@ export interface PlayerEngine {
 
 export type PlayerStatus = 'empty' | 'loading' | 'playing' | 'paused' | 'ended' | 'error';
 
+/** Where playback started; the player bar links back to it (§8.3). */
 export interface QueueSource {
-  kind: 'library' | 'playlist' | 'artist';
+  kind: 'songs' | 'library' | 'home' | 'playlist' | 'artist' | 'group';
   id?: string;
   label: string;
+}
+
+/** The page a queue source links to. */
+export function sourceHref(source: QueueSource | null): string {
+  switch (source?.kind) {
+    case 'library':
+      return '/library';
+    case 'home':
+      return '/home';
+    case 'playlist':
+      return `/playlists/${source.id}`;
+    case 'artist':
+      return `/artists/${source.id}`;
+    case 'group':
+      return `/groups/${source.id}`;
+    default:
+      return '/songs';
+  }
+}
+
+/** What installed apps save to restore the player after a restart, paused (R-PLAY-5…8). */
+export interface PlayerSnapshot {
+  v: 1;
+  trackId: string;
+  queue: string[];
+  original: string[];
+  source: QueueSource | null;
+  shuffle: boolean;
+  repeatOne: boolean;
+  positionSec: number;
 }
 
 export interface PlayerState {
@@ -269,6 +300,43 @@ export class PlayerController {
   toggleRepeat(): void {
     if (this.state.status === 'empty') return;
     this.set({ repeatOne: !this.state.repeatOne });
+  }
+
+  /** The state to save, or null when nothing is loaded. */
+  snapshot(): PlayerSnapshot | null {
+    const s = this.state;
+    const trackId = s.queue[s.index];
+    if (s.status === 'empty' || !trackId) return null;
+    return {
+      v: 1,
+      trackId,
+      queue: [...s.queue],
+      original: [...this.original],
+      source: s.source,
+      shuffle: s.shuffle,
+      repeatOne: s.repeatOne,
+      positionSec: s.status === 'ended' ? 0 : Math.floor(s.positionSec),
+    };
+  }
+
+  /**
+   * Restores a saved state, paused at the saved position (R-PLAY-5…8). Songs that
+   * no longer exist are dropped; nothing happens if the player is already in use
+   * or the saved song is gone.
+   */
+  async restore(snap: PlayerSnapshot): Promise<boolean> {
+    if (snap?.v !== 1 || this.state.status !== 'empty') return false;
+    const exists = (id: string) => !!this.resolve(id);
+    const queue = snap.queue.filter(exists);
+    const index = queue.indexOf(snap.trackId);
+    if (index < 0 || !this.resolve(snap.trackId)?.playable) return false;
+    this.original = snap.original.filter(exists);
+    this.set({ queue, source: snap.source, shuffle: snap.shuffle, repeatOne: snap.repeatOne });
+    await this.goTo(index, false, true);
+    const after: PlayerState = this.state; // goTo changed it
+    if (after.status !== 'paused' || after.queue[after.index] !== snap.trackId) return false;
+    if (snap.positionSec > 0) this.seek(Math.min(snap.positionSec, Math.max(0, this.state.durationSec - 1)));
+    return true;
   }
 
   /** A voluntary stop releases the pin and the resource. */

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { artistHintFromName, checkLimits, cleanName, MAX_SONG_NAME, nameProblem, newestFirst, type LimitError, type MessageKey } from '@song-sleeve/core';
+import { artistHintFromName, checkLimits, cleanName, MAX_SONG_NAME, nameProblem, type LimitError, type MessageKey } from '@song-sleeve/core';
 import { useCatalog, useSignal } from '../app/hooks';
 import { useI18n } from '../app/i18n';
 import { online, uploads } from '../app/services';
@@ -7,6 +7,7 @@ import { useToasts } from '../app/toasts';
 import { ArtistField, choiceToRef, type ArtistChoice } from '../components/ArtistField';
 import { Dialog } from '../components/common';
 import { Icon } from '../components/Icon';
+import { PlaylistPicker } from '../components/PlaylistPicker';
 import { DownloadButtons } from '../screens/Misc';
 import { baseName, extractFacts, looksLikeAudio } from '../upload/extract';
 
@@ -15,6 +16,8 @@ interface Row {
   file: File;
   name: string;
   artist: ArtistChoice;
+  /** The artist came from the page it was opened on, not from the user. */
+  autoArtist?: boolean;
   hint: string | null;
   reading: boolean;
   facts: { durationMs: number; format: 'mp3' | 'aac' | 'flac' | 'wav'; sha256: string } | null;
@@ -26,19 +29,19 @@ interface Row {
  * runs through the tab's sync queue, three at a time. "Keep only on this device"
  * shows the install-app alert and imports nothing (R-CLOUD-2).
  */
-export default function AddSongsDialog({ playlistId, onClose }: { playlistId?: string; onClose: () => void }) {
+export default function AddSongsDialog({ playlistIds, artistId, onClose }: { playlistIds?: string[]; artistId?: string; onClose: () => void }) {
   const { t } = useI18n();
   const toasts = useToasts();
   const isOnline = useSignal(online);
   const cat = useCatalog();
   const [rows, setRows] = useState<Row[]>([]);
   const [skipped, setSkipped] = useState<string[]>([]);
-  const [playlist, setPlaylist] = useState(playlistId ?? '');
+  const [playlists, setPlaylists] = useState<string[]>(playlistIds ?? []);
+  const preset = artistId ? cat.artists.get(artistId) : undefined;
   const [installAlert, setInstallAlert] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const plId = useId();
-  const playlists = newestFirst(cat.playlists.values());
 
   const addFiles = (files: File[]) => {
     const audio = files.filter(looksLikeAudio);
@@ -46,7 +49,8 @@ export default function AddSongsDialog({ playlistId, onClose }: { playlistId?: s
     if (rejected.length) setSkipped((s) => [...s, ...rejected]);
     const fresh: Row[] = audio.map((file) => {
       const name = baseName(file);
-      return { key: crypto.randomUUID(), file, name, artist: { kind: 'none' }, hint: artistHintFromName(name), reading: true, facts: null, problem: null };
+      const artist: ArtistChoice = preset ? { kind: 'existing', id: preset.id, name: preset.name } : { kind: 'none' };
+      return { key: crypto.randomUUID(), file, name, artist, autoArtist: !!preset, hint: artistHintFromName(name), reading: true, facts: null, problem: null };
     });
     setRows((r) => [...r, ...fresh]);
     for (const row of fresh) {
@@ -63,8 +67,11 @@ export default function AddSongsDialog({ playlistId, onClose }: { playlistId?: s
             const name = title || r.name;
             // A suggestion never assigns an artist on its own (R-ORG-2).
             const hint = f.artist ?? artistHintFromName(name) ?? r.hint;
+            // A file with its own artist tag shows the tag as a hint instead of the page's artist.
+            const fromTag = r.autoArtist && f.artist ? { artist: { kind: 'none' } as ArtistChoice, autoArtist: false } : null;
             return {
               ...r,
+              ...fromTag,
               name,
               hint,
               reading: false,
@@ -98,7 +105,7 @@ export default function AddSongsDialog({ playlistId, onClose }: { playlistId?: s
         file: r.file,
         name: cleanName(r.name),
         artist: choiceToRef(r.artist),
-        playlistIds: playlist ? [playlist] : [],
+        playlistIds: playlists,
         facts: { durationMs: r.facts!.durationMs, byteSize: r.file.size, format: r.facts!.format, sha256: r.facts!.sha256 },
       })),
     );
@@ -170,7 +177,7 @@ export default function AddSongsDialog({ playlistId, onClose }: { playlistId?: s
                   {t('add.removeAll')}
                 </button>
               </div>
-              <div style={{ marginTop: 8, maxHeight: '42vh', overflowY: 'auto', paddingBottom: 4 }}>
+              <div style={{ marginTop: 8, maxHeight: '42vh', overflowY: 'auto', paddingBottom: 4, paddingRight: 10, scrollbarGutter: 'stable' }}>
                 <div aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1.3fr) minmax(0,1.4fr) 40px', columnGap: 12, paddingBottom: 6 }}>
                   <span className="th">{t('add.colFile')}</span>
                   <span className="th">{t('add.colName')}</span>
@@ -214,7 +221,7 @@ export default function AddSongsDialog({ playlistId, onClose }: { playlistId?: s
                             />
                             {r.reading && <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{t('add.reading')}</span>}
                           </span>
-                          <ArtistField compact label={t('add.colArtist')} value={r.artist} hint={r.hint} onChange={(c) => update(r.key, { artist: c })} />
+                          <ArtistField compact label={t('add.colArtist')} value={r.artist} hint={r.hint} onChange={(c) => update(r.key, { artist: c, autoArtist: false })} />
                         </>
                       )}
                       <button type="button" className="icon-btn" style={{ width: 40, height: 40, background: 'var(--well)', marginTop: 2 }} aria-label={t('add.remove', { name: r.name })} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
@@ -232,17 +239,7 @@ export default function AddSongsDialog({ playlistId, onClose }: { playlistId?: s
               <label htmlFor={plId} className="label-sm" style={{ display: 'block', marginBottom: 6 }}>
                 {t('add.playlist')}
               </label>
-              <div className="select-wrap">
-                <select id={plId} className="input compact" value={playlist} onChange={(e) => setPlaylist(e.target.value)}>
-                  <option value="">{t('add.none')}</option>
-                  {playlists.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                <Icon name="chevronDown" />
-              </div>
+              <PlaylistPicker id={plId} value={playlists} onChange={setPlaylists} />
             </div>
           </div>
 

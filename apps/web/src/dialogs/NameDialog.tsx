@@ -5,7 +5,7 @@ import type { DialogSpec } from '../app/dialogs';
 import { useCatalog } from '../app/hooks';
 import { useT } from '../app/i18n';
 import { api, catalog } from '../app/services';
-import { useErrorText } from '../app/toasts';
+import { useErrorText, useToasts } from '../app/toasts';
 import { Alert, Dialog } from '../components/common';
 
 type Spec = Extract<DialogSpec, { kind: 'createPlaylist' | 'createGroup' | 'renamePlaylist' | 'renameGroup' | 'renameArtist' }>;
@@ -15,6 +15,7 @@ export default function NameDialog({ spec, onClose }: { spec: Spec; onClose: () 
   const t = useT();
   const navigate = useNavigate();
   const errorText = useErrorText();
+  const toasts = useToasts();
   const cat = useCatalog();
   const id = useId();
   const current =
@@ -45,6 +46,14 @@ export default function NameDialog({ spec, onClose }: { spec: Spec; onClose: () 
         case 'createPlaylist': {
           const r = await api.mutate<{ playlist: Playlist }>('POST', '/me/playlists', { name: value });
           catalog.upsertPlaylist(r.playlist);
+          if (spec.addTrackId) {
+            // Created from a song's "Add to playlist": add it and stay on this page.
+            const added = await api.mutate<{ playlist: Playlist }>('POST', `/me/playlists/${r.playlist.id}/songs`, { track_ids: [spec.addTrackId], expected_revision: r.playlist.revision });
+            catalog.upsertPlaylist(added.playlist);
+            onClose();
+            toasts.show(t('toast.addedTo', { name: r.playlist.name }), { icon: 'check' });
+            return;
+          }
           onClose();
           navigate(`/playlists/${r.playlist.id}`);
           return;

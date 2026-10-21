@@ -1,13 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { groupPlaylists, libraryOrder, matchesQuery, playlistTracks } from '@song-sleeve/core';
+import { groupPlaylists, libraryOrder, playlistTracks, type Group, type Playlist, type Track } from '@song-sleeve/core';
 import { useActions } from '../app/actions';
 import { useDialogs } from '../app/dialogs';
-import { useCatalog, useCatalogSelect } from '../app/hooks';
+import { useCatalog, useCatalogSelect, useCurrentTrackId, useIsPlaying } from '../app/hooks';
 import { useT } from '../app/i18n';
 import { player } from '../app/services';
-import { EmptyState, SearchField } from '../components/common';
-import { Icon } from '../components/Icon';
+import { EmptyState } from '../components/common';
+import { Menu, MenuItem } from '../components/Menu';
+import { Icon, type IconName } from '../components/Icon';
+import { Equalizer, GroupArt, PlaylistArt } from '../components/Sleeves';
+import { WithContextMenu, type ContextItem } from '../components/CollectionMenus';
+import { AddSongsButton, PageHeader } from '../components/PageHeader';
+import { SyncControl } from '../components/SyncControl';
 
 type Kind = 'songs' | 'playlists' | 'groups';
 
@@ -21,7 +26,6 @@ export default function Library() {
   const actions = useActions();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [q, setQ] = useState('');
   const s = useCatalog();
   const prefs = s.preferences;
   const only = params.get('show') as Kind | null;
@@ -29,6 +33,7 @@ export default function Library() {
 
   const counts = { songs: s.tracks.size, playlists: s.playlists.size, groups: s.groups.size };
   const order = useCatalogSelect((st) => libraryOrder(st));
+  const nowPlaying = useCurrentTrackId();
 
   const toggle = (k: Kind) => {
     if (only) {
@@ -42,29 +47,29 @@ export default function Library() {
   };
 
   const cards = useMemo(() => {
-    const out: { id: string; kind: Kind; name: string; meta: string; onOpen: () => void }[] = [];
+    const out: { id: string; kind: Kind; name: string; meta: string; count: number; onOpen: () => void; item: ContextItem }[] = [];
     if (shown.groups) {
       for (const g of [...s.groups.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-        if (!matchesQuery(q, g.name)) continue;
-        out.push({ id: g.id, kind: 'groups', name: g.name, meta: t('count.playlists', { n: groupPlaylists(s, g.id).length }), onOpen: () => navigate(`/groups/${g.id}`) });
+        const n = groupPlaylists(s, g.id).length;
+        out.push({ id: g.id, kind: 'groups', name: g.name, meta: t('count.playlists', { n }), count: n, onOpen: () => navigate(`/groups/${g.id}`), item: { kind: 'group', group: g as Group } });
       }
     }
     if (shown.playlists) {
       for (const p of [...s.playlists.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-        if (!matchesQuery(q, p.name)) continue;
-        out.push({ id: p.id, kind: 'playlists', name: p.name, meta: t('count.songs', { n: playlistTracks(s, p.id).length }), onOpen: () => navigate(`/playlists/${p.id}`) });
+        const n = playlistTracks(s, p.id).length;
+        out.push({ id: p.id, kind: 'playlists', name: p.name, meta: t('count.songs', { n }), count: n, onOpen: () => navigate(`/playlists/${p.id}`), item: { kind: 'playlist', playlist: p as Playlist } });
       }
     }
     if (shown.songs) {
       const ids = order.map((x) => x.id);
       for (const tr of order) {
         const artist = tr.artist_id ? s.artists.get(tr.artist_id)?.name : undefined;
-        if (!matchesQuery(q, tr.name, artist)) continue;
-        out.push({ id: tr.id, kind: 'songs', name: tr.name, meta: artist ?? t('common.noArtist'), onOpen: () => void player.playList(ids, tr.id, { kind: 'library', label: t('source.library') }) });
+        const play = () => void player.playList(ids, tr.id, { kind: 'library', label: t('nav.library') });
+        out.push({ id: tr.id, kind: 'songs', name: tr.name, meta: artist ?? t('common.noArtist'), count: 0, onOpen: play, item: { kind: 'song', track: tr as Track, onPlay: play } });
       }
     }
     return out;
-  }, [s, shown.groups, shown.playlists, shown.songs, q, order, t, navigate]);
+  }, [s, shown.groups, shown.playlists, shown.songs, order, t, navigate]);
 
   const chip = (k: Kind, label: string) => {
     const on = shown[k];
@@ -90,38 +95,27 @@ export default function Library() {
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <h1 className="page-title">{t('library.title')}</h1>
-          <p style={{ margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
-            <Icon name="cloudCheck" size={15} />
-            {t('library.filterNote')}
-          </p>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <button type="button" className="btn btn-secondary btn-sm" style={{ minHeight: 42 }} onClick={() => dialogs.open({ kind: 'createPlaylist' })}>
-            <Icon name="plus" size={16} />
-            {t('library.createPlaylist')}
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" style={{ minHeight: 42 }} onClick={() => dialogs.open({ kind: 'createGroup' })}>
-            <Icon name="plus" size={16} />
-            {t('library.createGroup')}
-          </button>
-        </div>
-        <div role="group" aria-label={t('library.showTypes')} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <PageHeader
+        title={t('library.title')}
+        sub={[t('count.songs', { n: counts.songs }), t('count.playlists', { n: counts.playlists }), t('count.groups', { n: counts.groups })].join(' · ')}
+        actions={
+          <>
+            <SyncControl spec={{ scope: 'library' }} />
+            <AddSongsButton />
+          </>
+        }
+      />
+      <div className="page-toolbar">
+        <div role="group" aria-label={t('library.showTypes')} data-tip={t('library.filterNote')} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {chip('songs', t('library.chipSongs'))}
           {chip('playlists', t('library.chipPlaylists'))}
           {chip('groups', t('library.chipGroups'))}
         </div>
-      </header>
-      <div style={{ marginTop: 18 }}>
-        <SearchField label={t('library.search')} placeholder={t('library.searchPh')} value={q} onChange={setQ} maxWidth={460} />
+        <CreateButton />
       </div>
 
       {cards.length === 0 ? (
-        q ? (
-          <EmptyState title={t('state.noResults', { query: q })} body={t('state.noResultsBody')} />
-        ) : counts.songs + counts.playlists + counts.groups === 0 ? (
+        counts.songs + counts.playlists + counts.groups === 0 ? (
           <EmptyState
             icon="note"
             title={t('state.noSongs')}
@@ -138,13 +132,14 @@ export default function Library() {
       ) : (
         <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
           {cards.slice(0, 600).map((c) => (
-            <CardLink key={c.kind + c.id} kind={c.kind} onOpen={c.onOpen} href={c.kind === 'songs' ? undefined : `/${c.kind}/${c.id}`}>
-              <CardArt kind={c.kind} />
+            <CardLink key={c.kind + c.id} kind={c.kind} item={c.item} current={c.kind === 'songs' && c.id === nowPlaying} onOpen={c.onOpen} href={c.kind === 'songs' ? undefined : `/${c.kind}/${c.id}`}>
+              <CardArt kind={c.kind} count={c.count} meta={c.meta} current={c.kind === 'songs' && c.id === nowPlaying} />
               <span style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, padding: '0 4px 4px' }}>
                 <span className="ellipsis" style={{ fontSize: 16, fontWeight: 600 }}>
                   {c.name}
                 </span>
                 <span className="ellipsis" style={{ fontSize: 13, color: 'var(--muted-2)' }}>
+                  <Icon name={kindIcon[c.kind]} size={13} style={{ color: 'var(--sand)', verticalAlign: '-2px', marginRight: 5 }} />
                   <strong style={{ fontWeight: 700, color: 'var(--white)', letterSpacing: '.04em', fontSize: 11, textTransform: 'uppercase' }}>{kindLabel[c.kind]}</strong> · {c.meta}
                 </span>
               </span>
@@ -156,50 +151,83 @@ export default function Library() {
   );
 }
 
-function CardLink({ href, onOpen, children }: { kind: Kind; href?: string; onOpen: () => void; children: React.ReactNode }) {
-  if (href) {
-    return (
-      <Link to={href} className="lcard">
-        {children}
-      </Link>
-    );
-  }
+/** A card; right-click opens the item's own menu. */
+function CardLink({ href, onOpen, current, item, children }: { kind: Kind; href?: string; current?: boolean; onOpen: () => void; item: ContextItem; children: React.ReactNode }) {
   return (
-    <button type="button" className="lcard" onClick={onOpen}>
-      {children}
-    </button>
+    <WithContextMenu item={item}>
+      {(onContextMenu) =>
+        href ? (
+          <Link to={href} className="lcard" onContextMenu={onContextMenu}>
+            {children}
+          </Link>
+        ) : (
+          // The song that's playing pauses instead of restarting.
+          <button type="button" className={'lcard' + (current ? ' current' : '')} onClick={current ? () => void player.toggle() : onOpen} onContextMenu={onContextMenu}>
+            {children}
+          </button>
+        )
+      }
+    </WithContextMenu>
   );
 }
 
-function CardArt({ kind }: { kind: Kind }) {
-  const vis = { position: 'relative' as const, aspectRatio: '4 / 3', borderRadius: 12 };
-  if (kind === 'songs') {
-    return (
-      <span aria-hidden="true" style={{ ...vis, background: 'var(--well)', color: 'var(--sand)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)' }}>
-        <span style={{ position: 'absolute', inset: 9, borderRadius: 7, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)' }} />
-        <Icon name="note" size={38} strokeWidth={1.8} />
-      </span>
-    );
-  }
-  if (kind === 'playlists') {
-    return (
-      <span aria-hidden="true" style={vis}>
-        <span style={{ position: 'absolute', left: '14%', right: 0, top: 0, bottom: '14%', borderRadius: 12, background: 'var(--raised)' }} />
-        <span style={{ position: 'absolute', left: 0, right: '14%', top: '14%', bottom: 0, borderRadius: 12, background: 'var(--well)', color: 'var(--sand)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1), 0 -6px 14px -6px rgba(0,0,0,.6)' }}>
-          <Icon name="songs" size={34} />
-        </span>
-      </span>
-    );
-  }
+const kindIcon: Record<Kind, IconName> = { songs: 'note', playlists: 'playlist', groups: 'group' };
+
+/** Card art per kind (designs/proposals/LibraryCards): sleeve, 2×2 mosaic, folder. */
+function CardArt({ kind, count, meta, current }: { kind: Kind; count: number; meta: string; current: boolean }) {
+  if (kind === 'songs') return <SongCardArt current={current} />;
+  if (kind === 'playlists') return <PlaylistArt width="100%" height="auto" songs={count} style={{ aspectRatio: '4 / 3', gap: 5 }} />;
   return (
-    <span aria-hidden="true" style={{ ...vis, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span style={{ position: 'relative', width: 120, height: 120 }}>
-        <span style={{ position: 'absolute', left: 22, top: -4, width: 96, height: 96, borderRadius: 12, background: 'var(--raised-2)', transform: 'rotate(12deg)' }} />
-        <span style={{ position: 'absolute', left: 12, top: 6, width: 96, height: 96, borderRadius: 12, background: 'var(--raised)', transform: 'rotate(5deg)' }} />
-        <span style={{ position: 'absolute', left: 0, top: 20, width: 100, height: 100, borderRadius: 12, background: 'var(--well)', color: 'var(--sand)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1), 0 10px 18px -8px rgba(0,0,0,.6)' }}>
-          <Icon name="group" size={32} />
-        </span>
-      </span>
+    <span aria-hidden="true" style={{ aspectRatio: '4 / 3', display: 'flex', alignItems: 'flex-end', padding: '4% 3% 0' }}>
+      <GroupArt width="100%" height="100%" label={meta} />
     </span>
+  );
+}
+
+function SongCardArt({ current }: { current: boolean }) {
+  return (
+    <span aria-hidden="true" className={'song-art' + (current ? ' current' : '')}>
+      {current ? <NowPlaying /> : <Icon name="note" size={38} strokeWidth={1.8} />}
+    </span>
+  );
+}
+
+function NowPlaying() {
+  return <Equalizer playing={useIsPlaying()} size={34} />;
+}
+
+/** One round + with a menu: New playlist, New group (designs/proposals/Round3 #create). */
+function CreateButton() {
+  const t = useT();
+  const dialogs = useDialogs();
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const go = (kind: 'createPlaylist' | 'createGroup') => () => {
+    setOpen(false);
+    dialogs.open({ kind });
+  };
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        className={'round-btn create-btn' + (open ? ' open' : '')}
+        style={{ marginLeft: 'auto' }}
+        aria-label={t('library.create')}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-tip={t('library.create')}
+        data-tip-align="end"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon name="plus" size={22} />
+      </button>
+      {open && (
+        <Menu anchor={btn} onClose={() => setOpen(false)} label={t('library.create')} width={230}>
+          <MenuItem icon="playlist" label={t('library.newPlaylist')} onSelect={go('createPlaylist')} />
+          <MenuItem icon="group" label={t('library.newGroup')} onSelect={go('createGroup')} />
+        </Menu>
+      )}
+    </>
   );
 }

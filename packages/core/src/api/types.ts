@@ -49,6 +49,22 @@ export interface Track {
   revision: number;
   created_at: string;
   operation: OperationSummary | null;
+  /** Installed apps only: what this device knows about the song (§8.2). */
+  device?: DeviceInfo;
+}
+
+/**
+ * Local songs reach the shared screens as tracks whose ID starts with `local:`
+ * and whose `device.local` is set; synced songs carry `downloaded` when their file
+ * is already in this device's Songs folder.
+ */
+export interface DeviceInfo {
+  local: boolean;
+  health?: 'ready' | 'needs_relink' | 'source_changed' | 'access_denied';
+  sync_state?: 'local_only' | 'queued' | 'syncing' | 'sync_failed' | 'needs_attention';
+  sync_failure?: string | null;
+  source_path?: string;
+  downloaded?: boolean;
 }
 
 export interface ArtistRef {

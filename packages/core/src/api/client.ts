@@ -45,6 +45,8 @@ export interface ClientOptions {
   onUnauthenticated?: () => void;
   onUpdateRequired?: (minimum: string | undefined) => void;
   isOnline?: () => boolean;
+  /** Replaces the global fetch (the desktop shell maps its proxy answers). */
+  fetch?: typeof fetch;
 }
 
 export interface MutateOptions {
@@ -71,7 +73,11 @@ export class ApiClient {
   /** Requests whose result is unknown (R-MUT-4). In memory only on the web (R-WEB). */
   readonly outstanding = new Map<string, OutstandingRequest>();
 
-  constructor(private readonly opts: ClientOptions) {}
+  private readonly fetch: typeof fetch;
+
+  constructor(private readonly opts: ClientOptions) {
+    this.fetch = opts.fetch ?? ((input, init) => fetch(input, init));
+  }
 
   setCsrfToken(token: string | null | undefined): void {
     this.csrf = token ?? null;
@@ -115,7 +121,7 @@ export class ApiClient {
     if (this.offline()) throw new ConnectionRequiredError();
     let res: Response;
     try {
-      res = await fetch(this.opts.baseUrl + path, { method: 'GET', headers: this.headers(), credentials: 'include', signal: init.signal });
+      res = await this.fetch(this.opts.baseUrl + path, { method: 'GET', headers: this.headers(), credentials: 'include', signal: init.signal });
     } catch (e) {
       if ((e as Error).name === 'AbortError') throw e;
       throw new ConnectionRequiredError();
@@ -128,7 +134,7 @@ export class ApiClient {
     if (this.offline()) throw new ConnectionRequiredError();
     let res: Response;
     try {
-      res = await fetch(this.opts.baseUrl + path, {
+      res = await this.fetch(this.opts.baseUrl + path, {
         method: 'POST',
         headers: this.headers({ 'Content-Type': 'application/json' }),
         credentials: 'include',
@@ -152,7 +158,7 @@ export class ApiClient {
     const requestId = opts.requestId ?? newRequestId();
     let res: Response;
     try {
-      res = await fetch(this.opts.baseUrl + path, {
+      res = await this.fetch(this.opts.baseUrl + path, {
         method,
         headers: this.headers({ 'Content-Type': 'application/json', 'Idempotency-Key': requestId }),
         credentials: 'include',
@@ -175,6 +181,6 @@ export class ApiClient {
 
   /** Raw fetch with the client headers, for streams (SSE). */
   stream(path: string, signal: AbortSignal): Promise<Response> {
-    return fetch(this.opts.baseUrl + path, { headers: this.headers({ Accept: 'text/event-stream' }), credentials: 'include', signal, cache: 'no-store' });
+    return this.fetch(this.opts.baseUrl + path, { headers: this.headers({ Accept: 'text/event-stream' }), credentials: 'include', signal, cache: 'no-store' });
   }
 }

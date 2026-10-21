@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PlayerController, type EngineEvents, type PlayableTrack, type PlayerEngine } from './controller';
+import { PlayerController, sourceHref, type EngineEvents, type PlayableTrack, type PlayerEngine } from './controller';
 
 class FakeEngine implements PlayerEngine {
   events: EngineEvents | null = null;
@@ -30,7 +30,7 @@ function setup(tracks: Record<string, Partial<PlayableTrack>>) {
   return { db, engine, ctl };
 }
 
-const src = { kind: 'library' as const, label: 'Songs' };
+const src = { kind: 'songs' as const, label: 'Songs' };
 
 describe('PlayerController', () => {
   it('snapshots the queue and skips unplayable songs (R-PLAY-3)', async () => {
@@ -118,5 +118,41 @@ describe('PlayerController', () => {
     ctl.onTrackDeleted('a', true);
     expect(ctl.getState().status).toBe('empty');
     expect(engine.unload).toHaveBeenCalled();
+  });
+
+  it('restores a snapshot paused at the saved position, without missing songs (R-PLAY-5…8)', async () => {
+    const a = setup({ a: {}, b: {}, c: {} });
+    await a.ctl.playList(['a', 'b', 'c'], 'b', { kind: 'playlist', id: 'p1', label: 'Mix' });
+    a.engine.events!.onTime(42.7);
+    a.ctl.toggleRepeat();
+    const snap = a.ctl.snapshot()!;
+    expect(snap).toMatchObject({ trackId: 'b', positionSec: 42, repeatOne: true, source: { kind: 'playlist', id: 'p1' } });
+
+    const b = setup({ b: {}, c: {} });
+    expect(await b.ctl.restore(snap)).toBe(true);
+    const st = b.ctl.getState();
+    expect(st.status).toBe('paused');
+    expect(st.current?.id).toBe('b');
+    expect(st.queue).toEqual(['b', 'c']);
+    expect(st.repeatOne).toBe(true);
+    expect(b.engine.playing).toBe(false);
+    expect(b.engine.seek).toHaveBeenCalledWith(42);
+  });
+
+  it('does not restore over playback or when the saved song is gone', async () => {
+    const { ctl } = setup({ a: {} });
+    const snap = { v: 1 as const, trackId: 'x', queue: ['x'], original: ['x'], source: null, shuffle: false, repeatOne: false, positionSec: 3 };
+    expect(await ctl.restore(snap)).toBe(false);
+    await ctl.playList(['a'], 'a', src);
+    expect(await ctl.restore({ ...snap, trackId: 'a', queue: ['a'] })).toBe(false);
+    expect(ctl.snapshot()?.trackId).toBe('a');
+  });
+
+  it('links every queue source to its page', () => {
+    expect(sourceHref({ kind: 'songs', label: '' })).toBe('/songs');
+    expect(sourceHref({ kind: 'home', label: '' })).toBe('/home');
+    expect(sourceHref({ kind: 'library', label: '' })).toBe('/library');
+    expect(sourceHref({ kind: 'group', id: 'g', label: '' })).toBe('/groups/g');
+    expect(sourceHref(null)).toBe('/songs');
   });
 });

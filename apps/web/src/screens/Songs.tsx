@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { formatClock, libraryOrder, matchesQuery, type MessageKey, type Track } from '@song-sleeve/core';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router';
+import { formatClock, libraryOrder, type MessageKey, type Track } from '@song-sleeve/core';
 import { useActions } from '../app/actions';
-import { useDialogs } from '../app/dialogs';
-import { useCatalog, useCatalogSelect, usePlayer, useUploads } from '../app/hooks';
+import { useCatalog, useCatalogSelect, useCurrentTrackId, useUploads } from '../app/hooks';
 import { useT } from '../app/i18n';
 import { player, uploads } from '../app/services';
-import { EmptyState, SearchField } from '../components/common';
+import { EmptyState } from '../components/common';
 import { Icon } from '../components/Icon';
-import { IncrementalList, ReorderableList } from '../components/ReorderableList';
+import { AddSongsButton, PageHeader } from '../components/PageHeader';
+import { SyncControl } from '../components/SyncControl';
+import { ReorderableList } from '../components/ReorderableList';
 import { SongRow, StatusBadge, songColumns } from '../components/SongRow';
 import type { UploadItem } from '../upload/uploader';
 
@@ -72,65 +74,74 @@ function UploadRow({ item }: { item: UploadItem }) {
 /** designs/WebSongs: every song in library order, synced songs only on the web. */
 export default function Songs() {
   const t = useT();
-  const dialogs = useDialogs();
   const actions = useActions();
-  const [q, setQ] = useState('');
   const s = useCatalog();
-  const nowPlaying = usePlayer().current?.id;
+  const nowPlaying = useCurrentTrackId();
   const order = useCatalogSelect((st) => libraryOrder(st));
   const items = useUploads();
   const pendingUploads = items.filter((i) => i.status !== 'done' && !(i.trackId && s.tracks.has(i.trackId)));
-  const failed = items.filter((i) => i.status === 'failed').length;
+  const webFailed = items.filter((i) => i.status === 'failed').length;
   const syncing = order.filter((x) => x.state === 'pending_upload').length;
-  const queued = items.filter((i) => i.status === 'queued').length;
-  const filtered = q ? order.filter((x) => matchesQuery(q, x.name, x.artist_id ? s.artists.get(x.artist_id)?.name : null)) : order;
+  // Installed apps: songs only on this device, and their queued or failed syncs.
+  const localOnly = order.filter((x) => x.device?.local);
+  const failed = webFailed + localOnly.filter((x) => x.device?.sync_state === 'sync_failed' || x.device?.sync_state === 'needs_attention').length;
+  const queued = items.filter((i) => i.status === 'queued').length + localOnly.filter((x) => x.device?.sync_state === 'queued').length;
   const ids = order.map((x) => x.id);
-  const play = (id: string) => void player.playList(ids, id, { kind: 'library', label: t('source.library') });
+  const play = (id: string) => void player.playList(ids, id, { kind: 'songs', label: t('source.library') });
 
-  const addBtn = (
-    <button type="button" className="btn btn-primary" onClick={() => dialogs.open({ kind: 'addSongs' })}>
-      <Icon name="plus" size={18} strokeWidth={2.4} />
-      {t('home.addSongs')}
-    </button>
-  );
+  // Opened from search with ?focus=<id>: scroll to that song and flash it once.
+  const [params, setParams] = useSearchParams();
+  const focus = params.get('focus');
+  useEffect(() => {
+    if (!focus) return;
+    // The list may render the row a frame or two later (it grows to include it).
+    let frame = 0;
+    let tries = 0;
+    const tick = () => {
+      const row = document.querySelector<HTMLElement>(`[data-track-id="${CSS.escape(focus)}"]`);
+      if (!row) {
+        if (tries++ < 30) frame = requestAnimationFrame(tick);
+        return;
+      }
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row.classList.remove('flash');
+      void row.offsetWidth;
+      row.classList.add('flash');
+      setParams({}, { replace: true });
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [focus, order.length, setParams]);
+
+  const addBtn = <AddSongsButton />;
+  const sub = [t('count.songs', { n: order.length }), localOnly.length ? t('songs.localOnly', { n: localOnly.length }) : null, syncing + queued + failed > 0 ? t('songs.syncSummary', { syncing, queued, failed }) : null].filter(Boolean).join(' · ');
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <h1 className="page-title">{t('songs.title')}</h1>
-          <p className="page-sub">{t('count.songs', { n: order.length })}</p>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 250, padding: '8px 14px', borderRadius: 14, background: 'var(--charcoal)' }}>
-            <Icon name="cloudCheck" size={20} style={{ color: 'var(--sand)' }} />
-            <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <strong style={{ fontSize: 13, fontWeight: 600 }}>{t('songs.cloudStatus')}</strong>
-              <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{syncing + queued + failed === 0 ? t('songs.allSynced') : t('songs.syncSummary', { syncing, queued, failed })}</span>
-            </span>
-          </div>
-          {failed > 0 && (
-            <button type="button" className="btn btn-sand" onClick={() => uploads.retryAllFailed()}>
-              <Icon name="retry" size={16} strokeWidth={2.4} />
-              {t('songs.retryFailed')}
-            </button>
-          )}
-          {addBtn}
-        </div>
-      </header>
-      <div style={{ marginTop: 20 }}>
-        <SearchField label={t('songs.search')} placeholder={t('songs.search')} value={q} onChange={setQ} />
-      </div>
+      <PageHeader
+        title={t('songs.title')}
+        sub={sub}
+        actions={
+          <>
+            {webFailed > 0 && (
+              <button type="button" className="btn btn-sand" onClick={() => uploads.retryAllFailed()}>
+                <Icon name="retry" size={16} strokeWidth={2.4} />
+                {t('songs.retryFailed')}
+              </button>
+            )}
+            <SyncControl spec={{ scope: 'library' }} />
+            {addBtn}
+          </>
+        }
+      />
 
       {order.length === 0 && pendingUploads.length === 0 ? (
         <EmptyState icon="note" title={t('state.noSongs')} body={t('state.noSongsBody')} action={addBtn} />
-      ) : q && filtered.length === 0 ? (
-        <EmptyState title={t('state.noResults', { query: q })} body={t('state.noResultsBody')} />
       ) : (
-        <div className="table-scroll" style={{ marginTop: 18 }}>
+        <div className="table-scroll" style={{ marginTop: 22 }}>
           <div style={{ minWidth: 820, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <SongTableHead grip={!q} artist />
-            {pendingUploads.length > 0 && !q && (
+            <SongTableHead grip artist />
+            {pendingUploads.length > 0 && (
               <ol aria-label={t('songs.uploading')} className="song-list">
                 {pendingUploads.map((i) => (
                   <li key={i.id}>
@@ -139,24 +150,16 @@ export default function Songs() {
                 ))}
               </ol>
             )}
-            {q ? (
-              <IncrementalList
-                items={filtered}
-                getId={(x) => x.id}
-                label={t('songs.listLabel')}
-                render={(x) => <SongRow track={x} playing={x.id === nowPlaying} onPlay={() => play(x.id)} ctx={{}} />}
-              />
-            ) : (
-              <ReorderableList<Track>
-                items={order}
-                getId={(x) => x.id}
-                getName={(x) => x.name}
-                enabled
-                label={t('songs.listLabel')}
-                onMove={(x, after, before) => actions.moveTrack(x, after, before)}
-                renderRow={(x, h) => <SongRow track={x} playing={x.id === nowPlaying} onPlay={() => play(x.id)} ctx={{ grip: h.grip, moveToTop: h.moveToTop, moveToBottom: h.moveToBottom }} dragging={h.dragging} />}
-              />
-            )}
+            <ReorderableList<Track>
+              items={order}
+              revealId={focus}
+              getId={(x) => x.id}
+              getName={(x) => x.name}
+              enabled
+              label={t('songs.listLabel')}
+              onMove={(x, after, before) => actions.moveTrack(x, after, before)}
+              renderRow={(x, h) => <SongRow track={x} playing={x.id === nowPlaying} onPlay={() => play(x.id)} ctx={{ grip: h.grip, moveToTop: h.moveToTop, moveToBottom: h.moveToBottom }} dragging={h.dragging} />}
+            />
           </div>
         </div>
       )}

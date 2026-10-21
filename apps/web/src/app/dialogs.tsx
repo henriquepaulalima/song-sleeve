@@ -1,11 +1,13 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 export type DialogSpec =
-  | { kind: 'addSongs'; playlistId?: string }
+  /** Opened from a playlist or artist page: that playlist is checked, that artist filled in. */
+  | { kind: 'addSongs'; playlistIds?: string[]; artistId?: string }
   | { kind: 'editSong'; trackId: string }
   | { kind: 'replaceAudio'; trackId: string }
   | { kind: 'deleteSong'; trackId: string }
-  | { kind: 'createPlaylist' }
+  /** With addTrackId, the new playlist gets that song and the user stays where they are. */
+  | { kind: 'createPlaylist'; addTrackId?: string }
   | { kind: 'createGroup' }
   | { kind: 'renamePlaylist'; id: string }
   | { kind: 'renameGroup'; id: string }
@@ -18,7 +20,10 @@ export type DialogSpec =
   | { kind: 'deleteArtist'; id: string }
   | { kind: 'changePassword' }
   | { kind: 'deleteAccount' }
-  | { kind: 'installApp' };
+  | { kind: 'installApp' }
+  /** Sync a library, playlist or group to the cloud (installed apps). */
+  | { kind: 'syncScope'; scope: 'library' }
+  | { kind: 'syncScope'; scope: 'playlist' | 'group'; id: string };
 
 interface Dialogs {
   open: (d: DialogSpec) => void;
@@ -37,11 +42,12 @@ const DeleteCollectionDialog = lazy(() => import('../dialogs/DeleteCollectionDia
 const ChangePasswordDialog = lazy(() => import('../dialogs/ChangePasswordDialog'));
 const DeleteAccountDialog = lazy(() => import('../dialogs/DeleteAccountDialog'));
 const InstallAppDialog = lazy(() => import('../dialogs/InstallAppDialog'));
+const SyncScopeDialog = lazy(() => import('../dialogs/SyncScopeDialog'));
 
 function render(d: DialogSpec, close: () => void): ReactNode {
   switch (d.kind) {
     case 'addSongs':
-      return <AddSongsDialog playlistId={d.playlistId} onClose={close} />;
+      return <AddSongsDialog playlistIds={d.playlistIds} artistId={d.artistId} onClose={close} />;
     case 'editSong':
       return <EditSongDialog trackId={d.trackId} onClose={close} />;
     case 'replaceAudio':
@@ -68,6 +74,8 @@ function render(d: DialogSpec, close: () => void): ReactNode {
       return <DeleteAccountDialog onClose={close} />;
     case 'installApp':
       return <InstallAppDialog onClose={close} />;
+    case 'syncScope':
+      return <SyncScopeDialog spec={d} onClose={close} />;
   }
 }
 

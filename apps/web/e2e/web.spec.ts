@@ -58,12 +58,14 @@ test('add songs, play, organize', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Pause' }).first()).toBeVisible({ timeout: 20_000 });
 
   await page.getByRole('link', { name: 'Library' }).first().click();
-  await page.getByRole('button', { name: 'Create playlist' }).click();
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'New playlist' }).click();
   const name = `E2E ${Date.now() % 100000}`;
   await page.getByLabel('Name').fill(name);
   await page.getByRole('dialog').getByRole('button', { name: 'Create', exact: true }).click();
   await page.waitForURL('**/playlists/**');
-  await page.getByRole('button', { name: 'Add songs to playlist' }).first().click();
+  await page.getByRole('button', { name: 'Add songs' }).first().click();
+  await page.getByRole('menuitem', { name: /Choose from your songs/ }).click();
   const boxes = page.getByRole('dialog').getByRole('checkbox');
   await boxes.nth(0).click();
   await boxes.nth(1).click();

@@ -1,4 +1,5 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { MAX_ARTIST_NAME, cleanName, didYouMean, findSameArtist, searchArtists, type ArtistCandidate, type ArtistRef } from '@song-sleeve/core';
 import { useCatalogSelect } from '../app/hooks';
 import { useT } from '../app/i18n';
@@ -64,12 +65,18 @@ export function ArtistField({
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo(() => (open ? searchArtists(text, artists) : []), [open, text, artists]);
   const typed = cleanName(text);
+  // An empty field lists every artist by name; typing filters.
+  const results = useMemo(
+    () => (!open ? [] : typed ? searchArtists(text, artists) : [...artists].sort((a, b) => a.name.localeCompare(b.name)).map((artist) => ({ artist }))),
+    [open, text, typed, artists],
+  );
+  const hintChoice = hint && !typed ? textToChoice(hint, artists) : null;
   const same = typed ? findSameArtist(typed, artists) : null;
   const suggestion = typed && !same ? didYouMean(typed, artists) : null;
   const options: { key: string; label: string; meta?: string; choice: ArtistChoice; isNew?: boolean }[] = [
-    ...results.map((r) => ({ key: r.artist.id!, label: r.artist.name, meta: t('count.songs', { n: r.artist.songCount ?? 0 }), choice: { kind: 'existing', id: r.artist.id!, name: r.artist.name } as ArtistChoice })),
+    ...(hintChoice && hintChoice.kind !== 'none' ? [{ key: '__hint', label: t('add.useArtist', { name: hint! }), meta: t('add.fromFile'), choice: hintChoice, isNew: true }] : []),
+    ...results.filter((r) => !(hintChoice?.kind === 'existing' && r.artist.id === hintChoice.id)).map((r) => ({ key: r.artist.id!, label: r.artist.name, meta: t('count.songs', { n: r.artist.songCount ?? 0 }), choice: { kind: 'existing', id: r.artist.id!, name: r.artist.name } as ArtistChoice })),
     ...(typed && !same && [...typed].length <= MAX_ARTIST_NAME ? [{ key: '__new', label: t('edit.newArtist', { name: typed }), choice: { kind: 'new', name: typed } as ArtistChoice, isNew: true }] : []),
   ];
 
@@ -83,6 +90,11 @@ export function ArtistField({
     // Leaving the field keeps what was typed as a choice; an exact match reuses.
     pick(textToChoice(text, artists));
   };
+
+  const pop = usePopover(compact && open && options.length > 0, inputRef);
+
+  const useHint = () => pick(textToChoice(hint!, artists));
+  const useSuggestion = () => pick({ kind: 'existing', id: suggestion!.id!, name: suggestion!.name });
 
   const note = value.kind === 'existing' ? t('edit.inLibrary') : value.kind === 'new' ? t('edit.newArtistNote') : null;
 
@@ -105,7 +117,7 @@ export function ArtistField({
           {!compact && <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{note}</span>}
           <Icon name="chevronDown" size={16} style={{ marginLeft: 'auto', color: 'var(--muted-2)' }} />
         </button>
-        {compact && <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{note}</span>}
+        {compact && <FieldSlot>{note}</FieldSlot>}
       </div>
     );
   }
@@ -115,114 +127,165 @@ export function ArtistField({
       <label htmlFor={inputId} className="sr-only">
         {label}
       </label>
-      <div className={'input' + (compact ? ' compact' : '') + ' on-surface'} style={{ display: 'flex', alignItems: 'center', gap: 10, ...(open ? { borderColor: 'var(--sand)', boxShadow: '0 0 0 3px rgba(229,220,197,.2)' } : null) }}>
-        {!compact && <Icon name="search" size={18} style={{ color: 'var(--muted-2)' }} />}
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="text"
-          role="combobox"
-          aria-expanded={open && options.length > 0}
-          aria-controls={listId}
-          aria-autocomplete="list"
-          autoFocus={autoFocus}
-          placeholder={t('edit.searchArtists')}
-          value={text}
-          maxLength={MAX_ARTIST_NAME * 2}
-          onFocus={() => setOpen(true)}
-          onChange={(e) => {
-            setText(e.target.value);
-            setOpen(true);
-            setActive(0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setActive((a) => Math.min(a + 1, options.length - 1));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setActive((a) => Math.max(a - 1, 0));
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              const o = options[active];
-              if (o) pick(o.choice);
-              else commitText();
-            } else if (e.key === 'Escape') {
-              e.stopPropagation();
-              setOpen(false);
-            }
-          }}
-          onBlur={(e) => {
-            if (!wrapRef.current?.contains(e.relatedTarget as Node)) commitText();
-          }}
-          style={{ flex: 1, minWidth: 0, border: 0, background: 'transparent', color: 'var(--white)', font: 'inherit', outline: 'none' }}
-        />
+      <div style={{ position: 'relative' }}>
+        <div className={'input' + (compact ? ' compact' : '') + ' on-surface'} style={{ display: 'flex', alignItems: 'center', gap: 10, ...(open ? { borderColor: 'var(--sand)', boxShadow: '0 0 0 3px rgba(229,220,197,.2)' } : null) }}>
+          {!compact && <Icon name="search" size={18} style={{ color: 'var(--muted-2)' }} />}
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="text"
+            role="combobox"
+            aria-expanded={open && options.length > 0}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            autoFocus={autoFocus}
+            placeholder={t('edit.searchArtists')}
+            value={text}
+            maxLength={MAX_ARTIST_NAME * 2}
+            onFocus={() => setOpen(true)}
+            onChange={(e) => {
+              setText(e.target.value);
+              setOpen(true);
+              setActive(0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActive((a) => Math.min(a + 1, options.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActive((a) => Math.max(a - 1, 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const o = options[active];
+                if (o) pick(o.choice);
+                else commitText();
+              } else if (e.key === 'Escape') {
+                e.stopPropagation();
+                setOpen(false);
+              }
+            }}
+            onBlur={(e) => {
+              const to = e.relatedTarget as Node | null;
+              if (!wrapRef.current?.contains(to) && !pop.ref.current?.contains(to)) commitText();
+            }}
+            style={{ flex: 1, minWidth: 0, border: 0, background: 'transparent', color: 'var(--white)', font: 'inherit', outline: 'none' }}
+          />
+        </div>
+        {open && options.length > 0 && portal(
+          compact,
+          <div ref={pop.ref} className={compact ? 'artist-pop' : undefined} style={compact ? pop.style : { marginTop: 4 }}>
+              <ul id={listId} role="listbox" aria-label={label} onMouseDown={(e) => e.preventDefault()} style={{ listStyle: 'none', margin: 0, padding: 6, borderRadius: 16, background: 'var(--well)', boxShadow: 'var(--shadow-menu)', maxHeight: compact ? pop.maxHeight : 280, overflowY: 'auto' }}>
+                {options.map((o, i) => (
+                  <li key={o.key} role="option" aria-selected={i === active}>
+                    <button type="button" className="opt" aria-selected={i === active} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(o.choice)} style={{ minHeight: 48 }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          flex: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: o.isNew ? 'var(--sand)' : 'var(--charcoal)',
+                          color: o.isNew ? 'var(--ink)' : 'var(--sand)',
+                          fontFamily: 'var(--font-display)',
+                          fontStretch: '125%',
+                          fontWeight: 800,
+                          fontSize: 14,
+                        }}
+                      >
+                        {o.isNew ? <Icon name="plus" size={16} strokeWidth={2.6} /> : o.label.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="ellipsis" style={{ flex: 1 }}>
+                        {o.label}
+                      </span>
+                      {o.meta && <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{o.meta}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+          </div>,
+        )}
       </div>
-      {hint && !open && value.kind === 'none' && (
-        <button
-          type="button"
-          onClick={() => pick(textToChoice(hint, artists))}
-          style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '0 10px', borderRadius: 999, border: '1.5px dashed var(--sand)', background: 'transparent', color: 'var(--white)', font: '500 13px var(--font-ui)', cursor: 'pointer' }}
-        >
-          {t('add.useArtist', { name: hint })}
-        </button>
-      )}
-      {open && (typed || hint) && (
-        <div style={{ position: compact ? 'absolute' : 'static', top: compact ? '100%' : undefined, left: 0, right: 0, zIndex: 20, marginTop: 4 }}>
-          {suggestion && (
-            <div role="status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 12, background: 'var(--sand)', color: 'var(--ink)', fontSize: 14, marginBottom: 4 }}>
-              <span>{t('edit.didYouMean', { name: suggestion.name })}</span>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick({ kind: 'existing', id: suggestion.id!, name: suggestion.name })}
-                style={{ minHeight: 30, padding: '0 10px', borderRadius: 9, border: 0, background: 'var(--ink)', color: 'var(--sand)', font: '700 12px var(--font-ui)', cursor: 'pointer' }}
-              >
+      {compact ? (
+        // One line that's always there, so opening the field doesn't change the row's height.
+        <FieldSlot>
+          {open && suggestion ? (
+            <span role="status">
+              {t('edit.didYouMean', { name: suggestion.name })}{' '}
+              <button type="button" className="hint-link" onMouseDown={(e) => e.preventDefault()} onClick={useSuggestion}>
                 {t('edit.useIt')}
               </button>
-            </div>
+            </span>
+          ) : hint && value.kind === 'none' && !typed && !open ? (
+            <button type="button" className="hint-link" onMouseDown={(e) => e.preventDefault()} onClick={useHint}>
+              {t('add.useArtist', { name: hint })}
+            </button>
+          ) : (
+            note
           )}
-          {!typed && hint && (
-            <button type="button" className="opt" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(textToChoice(hint, artists))}>
+        </FieldSlot>
+      ) : (
+        <>
+          {hint && value.kind === 'none' && !typed && !open && (
+            // The file's tag as a hint under the field, like form hint text.
+            <button type="button" className="hint-link" onMouseDown={(e) => e.preventDefault()} onClick={useHint}>
               {t('add.useArtist', { name: hint })}
             </button>
           )}
-          {options.length > 0 && (
-            <ul id={listId} role="listbox" aria-label={label} style={{ listStyle: 'none', margin: 0, padding: 6, borderRadius: 16, background: 'var(--well)', boxShadow: 'var(--shadow-menu)', maxHeight: 280, overflowY: 'auto' }}>
-              {options.map((o, i) => (
-                <li key={o.key} role="option" aria-selected={i === active}>
-                  <button type="button" className="opt" aria-selected={i === active} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(o.choice)} style={{ minHeight: 48 }}>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        flex: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: o.isNew ? 'var(--sand)' : 'var(--charcoal)',
-                        color: o.isNew ? 'var(--ink)' : 'var(--sand)',
-                        fontFamily: 'var(--font-display)',
-                        fontStretch: '125%',
-                        fontWeight: 800,
-                        fontSize: 14,
-                      }}
-                    >
-                      {o.isNew ? <Icon name="plus" size={16} strokeWidth={2.6} /> : o.label.charAt(0).toUpperCase()}
-                    </span>
-                    <span className="ellipsis" style={{ flex: 1 }}>
-                      {o.label}
-                    </span>
-                    {o.meta && <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{o.meta}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {open && suggestion && (
+            <p role="status" className="field-hint">
+              {t('edit.didYouMean', { name: suggestion.name })}{' '}
+              <button type="button" className="hint-link" onMouseDown={(e) => e.preventDefault()} onClick={useSuggestion}>
+                {t('edit.useIt')}
+              </button>
+            </p>
           )}
-        </div>
+        </>
       )}
     </div>
   );
+}
+
+/** In a dialog's scrolling list the results float above the dialog, in a portal. */
+function portal(floating: boolean | undefined, node: React.ReactNode) {
+  return floating ? createPortal(node, document.body) : node;
+}
+
+/**
+ * Places the floating results under the input, or above it when there's no room
+ * below, and follows the input while anything scrolls.
+ */
+function usePopover(active: boolean | undefined, anchor: React.RefObject<HTMLElement | null>) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ style: CSSProperties; maxHeight: number }>({ style: { top: -9999, left: -9999 }, maxHeight: 280 });
+  useLayoutEffect(() => {
+    if (!active) return;
+    const update = () => {
+      const a = anchor.current?.closest('.input')?.getBoundingClientRect();
+      if (!a) return;
+      const below = window.innerHeight - a.bottom - 12;
+      const above = a.top - 12;
+      const up = below < 200 && above > below;
+      const maxHeight = Math.min(280, Math.max(120, up ? above : below));
+      const style: CSSProperties = up ? { left: a.left, width: a.width, bottom: window.innerHeight - a.top + 4 } : { left: a.left, width: a.width, top: a.bottom + 4 };
+      setPlace({ style, maxHeight });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [active, anchor]);
+  return { ref, ...place };
+}
+
+/** The one-line note under a compact field: fixed height, cut with an ellipsis. */
+function FieldSlot({ children }: { children: React.ReactNode }) {
+  return <span className="field-slot">{children}</span>;
 }

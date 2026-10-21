@@ -41,7 +41,7 @@ export function similarityKey(name: string): string {
 }
 
 /** Optimal string alignment distance, bounded for speed. */
-function editDistance(a: string, b: string, max: number): number {
+export function editDistance(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1;
   const prev2: number[] = new Array(b.length + 1).fill(0);
   let prev: number[] = Array.from({ length: b.length + 1 }, (_, j) => j);
@@ -64,7 +64,7 @@ function editDistance(a: string, b: string, max: number): number {
   return prev[b.length]!;
 }
 
-function typoBudget(len: number): number {
+export function typoBudget(len: number): number {
   if (len < 4) return 0;
   if (len < 8) return 1;
   return 2;

@@ -4,6 +4,8 @@ import { useDialogs } from '../app/dialogs';
 import { useCatalog } from '../app/hooks';
 import { useI18n } from '../app/i18n';
 import { api } from '../app/services';
+import { platform } from '../app/platform';
+import { ShortcutList } from '../components/ShortcutList';
 import { useSession } from '../app/session';
 import { useToasts } from '../app/toasts';
 import { LangSelect } from '../components/common';
@@ -200,6 +202,9 @@ export default function Profile() {
             </ul>
           </section>
 
+          {/* Installed apps list the shortcuts in Settings. */}
+          {platform.kind === 'web' && <ShortcutList />}
+
           <section className="card" aria-labelledby="h-sec">
             <p id="h-sec" className="cap">
               {t('profile.security')}
@@ -213,6 +218,34 @@ export default function Profile() {
                 <Icon name="logout" size={20} style={{ color: 'var(--sand)' }} />
                 {t('profile.logoutCurrent')}
               </button>
+              {platform.logoutAndRemove && (
+                <button type="button" className="btn btn-well" style={{ justifyContent: 'flex-start', minHeight: 54, fontWeight: 600 }} onClick={() => setAsking('__remove')}>
+                  <Icon name="trash" size={20} style={{ color: 'var(--sand)' }} />
+                  {t('logout.remove')}
+                </button>
+              )}
+              {asking === '__remove' && platform.logoutAndRemove && (
+                <div role="alertdialog" aria-labelledby="rm-t" style={{ padding: 16, borderRadius: 16, background: 'var(--sand)', color: 'var(--ink)' }}>
+                  <strong id="rm-t">{t('logout.removeTitle')}</strong>
+                  <p style={{ margin: '6px 0 12px', fontSize: 14, lineHeight: 1.45 }}>{t('logout.removeBody')}</p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn btn-sm" style={{ background: 'transparent', color: 'var(--ink)', boxShadow: 'inset 0 0 0 1.5px rgba(22,22,21,.5)' }} onClick={() => setAsking(null)}>
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() =>
+                        void platform.logoutAndRemove!()
+                          .then(() => session.dropSession())
+                          .catch((e) => toasts.error(e))
+                      }
+                    >
+                      {t('logout.removeConfirm')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <button type="button" className="link-btn" style={{ marginTop: 16, minHeight: 44, padding: '0 4px', fontSize: 15, fontWeight: 600, textDecorationColor: 'var(--orange)', textUnderlineOffset: 4 }} onClick={() => dialogs.open({ kind: 'deleteAccount' })}>
               {t('profile.deleteAccount')}

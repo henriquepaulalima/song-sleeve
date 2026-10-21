@@ -13,28 +13,14 @@ import {
   type PlayableTrack,
 } from '@song-sleeve/core';
 import { WebAudioEngine } from '../player/webEngine';
+import { Signal } from './signal';
+
+export { Signal };
 import { UploadQueue, type UploadFacts } from '../upload/uploader';
 
 declare const __APP_VERSION__: string;
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.1.0';
 
-type Listener = () => void;
-
-/** A tiny observable value for app-level flags. */
-export class Signal<T> {
-  private listeners = new Set<Listener>();
-  constructor(private value: T) {}
-  get = (): T => this.value;
-  set(v: T) {
-    if (Object.is(v, this.value)) return;
-    this.value = v;
-    for (const l of this.listeners) l();
-  }
-  subscribe = (fn: Listener): (() => void) => {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
-  };
-}
 
 export const unauthenticated = new Signal(0);
 export const updateRequired = new Signal<boolean>(false);

@@ -1,27 +1,32 @@
 import { useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { groupsOfPlaylist, playlistTracks, type Track } from '@song-sleeve/core';
+import { Link, useLocation, useParams } from 'react-router';
+import { formatLength, groupsOfPlaylist, playlistTracks, totalDurationMs, type Track } from '@song-sleeve/core';
 import { useActions } from '../app/actions';
 import { useDialogs } from '../app/dialogs';
-import { useCatalog, useCatalogSelect, usePlayer } from '../app/hooks';
-import { useT } from '../app/i18n';
+import { useCatalog, useCatalogSelect, useCurrentTrackId, usePlayerValue } from '../app/hooks';
+import { useI18n } from '../app/i18n';
 import { player } from '../app/services';
+import { tipFor } from '../app/shortcuts';
+import { CollectionHeader, type Crumb } from '../components/CollectionHeader';
+import { PlaylistMenu } from '../components/CollectionMenus';
 import { EmptyState } from '../components/common';
 import { Icon } from '../components/Icon';
-import { Menu, MenuDivider, MenuItem } from '../components/Menu';
+import { Menu, MenuItem } from '../components/Menu';
 import { ReorderableList } from '../components/ReorderableList';
 import { PlaylistHero } from '../components/Sleeves';
 import { SongRow } from '../components/SongRow';
+import { SyncControl } from '../components/SyncControl';
 import { SongTableHead } from './Songs';
 
 /** designs/WebPlaylist: songs in playlist order, synced songs only on the web. */
 export default function PlaylistPage() {
-  const t = useT();
+  const { t, locale } = useI18n();
   const { id = '' } = useParams();
-  const dialogs = useDialogs();
+  const { state } = useLocation();
   const actions = useActions();
   const s = useCatalog();
-  const nowPlaying = usePlayer().current?.id;
+  const nowPlaying = useCurrentTrackId();
+  const shuffle = usePlayerValue((p) => p.shuffle);
   const playlist = s.playlists.get(id);
   const tracks = useCatalogSelect((st) => playlistTracks(st, id), [id]);
   const groups = useCatalogSelect((st) => groupsOfPlaylist(st, id), [id]);
@@ -29,81 +34,73 @@ export default function PlaylistPage() {
   const menuBtn = useRef<HTMLButtonElement>(null);
 
   if (!playlist) {
-    return <EmptyState icon="songs" title={t('playlist.notFound')} action={<Link to="/library" className="btn btn-secondary">{t('nav.library')}</Link>} />;
+    return <EmptyState icon="playlist" title={t('playlist.notFound')} action={<Link to="/library" className="btn btn-secondary">{t('nav.library')}</Link>} />;
   }
   const ids = tracks.map((x) => x.id);
-  const play = (start: string | null, shuffle?: boolean) => void player.playList(ids, start, { kind: 'playlist', id: playlist.id, label: playlist.name }, shuffle === undefined ? {} : { shuffle });
+  // Play uses the player's shuffle mode; the shuffle button only toggles it.
+  const play = (start: string | null) => void player.playList(ids, start, { kind: 'playlist', id: playlist.id, label: playlist.name });
+  // Opened from a group, the breadcrumb goes back to that group.
+  const fromGroup = s.groups.get((state as { fromGroup?: string } | null)?.fromGroup ?? '');
+  const crumbs: Crumb[] = [
+    { label: t('common.breadcrumbLibrary'), to: '/library' },
+    fromGroup ? { label: fromGroup.name, to: `/groups/${fromGroup.id}` } : { label: t('library.chipPlaylists'), to: '/library?show=playlists' },
+    { label: playlist.name },
+  ];
 
   return (
     <>
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: 'var(--muted)' }}>
-        <Link to="/library" style={{ color: 'var(--white)' }}>
-          {t('common.breadcrumbLibrary')}
-        </Link>{' '}
-        <span aria-hidden="true">/</span> {t('library.chipPlaylists')}
-      </nav>
-      <header style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 24 }}>
-        <PlaylistHero />
-        <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-          <div className="kicker">{t('playlist.kicker')}</div>
-          <h1 className="page-title" style={{ margin: '6px 0 0', fontSize: 44, overflowWrap: 'anywhere' }}>
-            {playlist.name}
-          </h1>
-          <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--muted)' }}>
-            <span>{t('count.songs', { n: tracks.length })}</span>
+      <CollectionHeader
+        crumbs={crumbs}
+        back={fromGroup ? `/groups/${fromGroup.id}` : '/library'}
+        art={<PlaylistHero songs={tracks.length} />}
+        kicker={t('playlist.kicker')}
+        title={playlist.name}
+        meta={
+          <>
+            <span>
+              {t('count.songs', { n: tracks.length })}
+              {tracks.length > 0 && ` · ${formatLength(locale, totalDurationMs(tracks))}`}
+            </span>
             {groups.length > 0 && (
               <>
                 <span aria-hidden="true">·</span>
                 <span>{t('playlist.in')}</span>
                 {groups.map((g) => (
-                  <Link key={g.id} to={`/groups/${g.id}`} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, padding: '0 12px', borderRadius: 999, background: 'var(--charcoal)', color: 'var(--white)', fontSize: 13, textDecoration: 'none' }}>
+                  <Link key={g.id} to={`/groups/${g.id}`} className="coll-pill">
                     {g.name}
                   </Link>
                 ))}
               </>
             )}
-          </div>
-        </div>
-      </header>
+          </>
+        }
+        end={
+          <>
+            <SyncControl spec={{ scope: 'playlist', id: playlist.id }} />
+            <button ref={menuBtn} type="button" className="round-btn" aria-haspopup="menu" aria-expanded={menu} aria-label={t('playlist.options')} onClick={() => setMenu((m) => !m)} style={menu ? { background: 'var(--well)' } : undefined}>
+              <Icon name="more" />
+            </button>
+            {menu && <PlaylistMenu playlist={playlist} anchor={menuBtn} onClose={() => setMenu(false)} />}
+          </>
+        }
+      />
 
-      <div style={{ marginTop: 22, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <button type="button" className="btn btn-primary" disabled={tracks.length === 0} onClick={() => play(null, false)}>
+      <div className="coll-ctrls">
+        <button type="button" className="btn btn-primary" disabled={tracks.length === 0} onClick={() => play(null)}>
           <Icon name="play" size={18} />
           {t('common.play')}
         </button>
-        <button type="button" className="round-btn" aria-label={t('common.shufflePlay')} disabled={tracks.length === 0} onClick={() => play(null, true)}>
+        <button type="button" className={'round-btn' + (shuffle ? ' toggle-on' : '')} aria-label={t('player.shuffle')} aria-pressed={shuffle} data-tip={tipFor('shuffle', t)} onClick={() => player.setShuffle(!shuffle)}>
           <Icon name="shuffle" size={20} />
         </button>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '0 14px', borderRadius: 999, background: 'var(--charcoal)', fontSize: 14, fontWeight: 600, boxShadow: 'inset 0 0 0 1.5px var(--sand)' }}>
-          <Icon name="cloudCheck" size={18} style={{ color: 'var(--sand)' }} />
-          {t('playlist.cloud')}
-        </span>
-        <button type="button" className="btn btn-secondary btn-sm" style={{ minHeight: 44 }} onClick={() => dialogs.open({ kind: 'addSongsToPlaylist', playlistId: playlist.id })}>
-          <Icon name="plus" size={16} />
-          {t('playlist.addSongs')}
-        </button>
-        <button ref={menuBtn} type="button" className="round-btn" aria-haspopup="menu" aria-expanded={menu} aria-label={t('playlist.options')} onClick={() => setMenu((m) => !m)} style={menu ? { background: 'var(--well)' } : undefined}>
-          <Icon name="more" />
-        </button>
-        {menu && (
-          <Menu anchor={menuBtn} onClose={() => setMenu(false)} label={t('playlist.options')} width={260} align="start">
-            <MenuItem label={t('playlist.rename')} onSelect={() => (setMenu(false), dialogs.open({ kind: 'renamePlaylist', id: playlist.id }))} />
-            <MenuItem label={t('playlist.addToGroups')} onSelect={() => (setMenu(false), dialogs.open({ kind: 'addToGroups', playlistId: playlist.id }))} />
-            <MenuDivider />
-            <MenuItem label={t('playlist.delete')} sub={t('playlist.deleteSub')} danger onSelect={() => (setMenu(false), dialogs.open({ kind: 'deletePlaylist', id: playlist.id }))} />
-          </Menu>
-        )}
+        <AddToPlaylistButton playlistId={playlist.id} name={playlist.name} />
         {tracks.length > 1 && <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--muted)' }}>{t('common.dragHint')}</span>}
       </div>
 
       {tracks.length === 0 ? (
         <EmptyState
           title={t('playlist.empty')}
-          action={
-            <button type="button" className="btn btn-primary" onClick={() => dialogs.open({ kind: 'addSongsToPlaylist', playlistId: playlist.id })}>
-              {t('playlist.addSongs')}
-            </button>
-          }
+          action={<AddToPlaylistButton playlistId={playlist.id} name={playlist.name} primary />}
         />
       ) : (
         <div className="table-scroll" style={{ marginTop: 22 }}>
@@ -128,6 +125,44 @@ export default function PlaylistPage() {
             />
           </div>
         </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * "Add songs" on a playlist: new files from this computer (the playlist already
+ * checked in Add songs), or songs already in the library.
+ */
+function AddToPlaylistButton({ playlistId, name, primary }: { playlistId: string; name: string; primary?: boolean }) {
+  const { t } = useI18n();
+  const dialogs = useDialogs();
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const go = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        className={primary ? 'btn btn-primary' : 'btn btn-secondary btn-sm'}
+        style={primary ? undefined : { minHeight: 44, ...(open ? { background: 'var(--hover)' } : null) }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon name="plus" size={16} />
+        {t('playlist.addSongs')}
+        <Icon name="chevronDown" size={16} />
+      </button>
+      {open && (
+        <Menu anchor={btn} onClose={() => setOpen(false)} label={t('playlist.addSongs')} width={300} align="start">
+          <MenuItem icon="file" label={t('playlist.addFiles')} sub={t('playlist.addFilesSub', { name })} onSelect={go(() => dialogs.open({ kind: 'addSongs', playlistIds: [playlistId] }))} />
+          <MenuItem icon="playlistAdd" label={t('playlist.addExisting')} sub={t('playlist.addExistingSub')} onSelect={go(() => dialogs.open({ kind: 'addSongsToPlaylist', playlistId }))} />
+        </Menu>
       )}
     </>
   );

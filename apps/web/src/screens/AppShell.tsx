@@ -1,4 +1,5 @@
-import { Outlet } from 'react-router';
+import { useEffect, useRef } from 'react';
+import { Outlet, useLocation } from 'react-router';
 import { useCatalog, useSignal } from '../app/hooks';
 import { useT } from '../app/i18n';
 import { online } from '../app/services';
@@ -14,6 +15,12 @@ export default function AppShell() {
   const isOnline = useSignal(online);
   const s = useCatalog();
   const { catalogError, retryCatalog } = useSession();
+  // The page scrolls inside the shell, so a new page starts at the top.
+  const { pathname } = useLocation();
+  const main = useRef<HTMLElement>(null);
+  useEffect(() => {
+    main.current?.scrollTo({ top: 0 });
+  }, [pathname]);
   return (
     <div className="shell">
       {!isOnline && (
@@ -26,7 +33,7 @@ export default function AppShell() {
         <div className="shell-side">
           <Sidebar />
         </div>
-        <main className="shell-main">
+        <main ref={main} className="shell-main">
           <div className="content">
             {catalogError && !s.loaded ? (
               <EmptyState

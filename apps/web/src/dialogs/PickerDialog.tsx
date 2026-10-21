@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { groupPlaylists, groupsOfPlaylist, libraryOrder, matchesQuery, playlistTracks, type Group, type Playlist } from '@song-sleeve/core';
+import { useId, useMemo, useState } from 'react';
+import { MAX_GROUP_NAME, cleanName, groupPlaylists, groupsOfPlaylist, libraryOrder, matchesQuery, nameProblem, playlistTracks, type Group, type Playlist } from '@song-sleeve/core';
 import type { DialogSpec } from '../app/dialogs';
 import { useCatalog } from '../app/hooks';
 import { useT } from '../app/i18n';
@@ -100,6 +100,7 @@ export default function PickerDialog({ spec, onClose }: { spec: Spec; onClose: (
       <div style={{ marginTop: 16 }}>
         <SearchField label={t('common.search')} placeholder={t('common.search')} value={q} onChange={setQ} maxWidth={9999} />
       </div>
+      {spec.kind === 'addToGroups' && <NewGroupRow onCreated={(g) => setPicked((p) => new Set(p).add(g.id))} />}
       <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 330, overflow: 'auto' }}>
         {shown.map((o) => {
           const on = picked.has(o.id);
@@ -142,7 +143,7 @@ export default function PickerDialog({ spec, onClose }: { spec: Spec; onClose: (
             </li>
           );
         })}
-        {shown.length === 0 && <li style={{ padding: 16, color: 'var(--muted-2)', fontSize: 14 }}>{q ? t('state.noResults', { query: q }) : t('menu.noPlaylists')}</li>}
+        {shown.length === 0 && (q || spec.kind !== 'addToGroups') && <li style={{ padding: 16, color: 'var(--muted-2)', fontSize: 14 }}>{q ? t('state.noResults', { query: q }) : t('menu.noPlaylists')}</li>}
       </ul>
       {error && (
         <div style={{ marginTop: 12 }}>
@@ -158,5 +159,89 @@ export default function PickerDialog({ spec, onClose }: { spec: Spec; onClose: (
         </button>
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * "New group…" in Add to groups: turns into a name field; Create adds the group
+ * and checks it, so Add saves it with the other checked groups.
+ */
+function NewGroupRow({ onCreated }: { onCreated: (g: Group) => void }) {
+  const t = useT();
+  const errorText = useErrorText();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const id = useId();
+  const problem = nameProblem(name, MAX_GROUP_NAME);
+
+  const create = async () => {
+    if (problem || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.mutate<{ group: Group }>('POST', '/me/groups', { name: cleanName(name) });
+      catalog.upsertGroup(r.group);
+      onCreated(r.group);
+      setOpen(false);
+      setName('');
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button type="button" className="opt" style={{ marginTop: 10, color: 'var(--sand)' }} onClick={() => setOpen(true)}>
+        <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 10, boxShadow: 'inset 0 0 0 1.5px rgba(229,220,197,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <Icon name="folderPlus" size={18} />
+        </span>
+        <span style={{ flex: 1, fontWeight: 600 }}>{t('coll.newGroup')}</span>
+      </button>
+    );
+  }
+  return (
+    <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 14, background: 'var(--well)' }}>
+      <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
+        {t('coll.newGroupLabel')}
+      </label>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <input
+          id={id}
+          className="input compact"
+          type="text"
+          value={name}
+          placeholder={t('coll.newGroupPh')}
+          aria-invalid={problem === 'too_long'}
+          autoFocus
+          style={{ flex: 1, minWidth: 0, background: 'var(--charcoal)' }}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void create();
+            } else if (e.key === 'Escape') {
+              e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
+              setOpen(false);
+            }
+          }}
+        />
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </button>
+        <button type="button" className="btn btn-primary btn-sm" disabled={!!problem || busy} onClick={() => void create()}>
+          {t('common.create')}
+        </button>
+      </div>
+      {error && (
+        <div style={{ marginTop: 8 }}>
+          <Alert>{error}</Alert>
+        </div>
+      )}
+    </div>
   );
 }

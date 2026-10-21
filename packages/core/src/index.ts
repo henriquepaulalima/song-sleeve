@@ -5,6 +5,7 @@ export * from './catalog/selectors';
 export * from './catalog/syncService';
 export * from './player/controller';
 export * from './artistMatch';
+export * from './search';
 export * from './fields';
 export * from './limits';
 export * from './position';

@@ -33,6 +33,7 @@ export function ReorderableList<T>({
   label,
   className = 'song-list',
   pageSize = 150,
+  revealId,
 }: {
   items: T[];
   getId: (t: T) => string;
@@ -43,9 +44,16 @@ export function ReorderableList<T>({
   label: string;
   className?: string;
   pageSize?: number;
+  /** Renders at least up to this item, so it can be scrolled to. */
+  revealId?: string | null;
 }) {
   const [preview, setPreview] = useState<string[] | null>(null);
   const [limit, setLimit] = useState(pageSize);
+  useEffect(() => {
+    if (!revealId) return;
+    const i = items.findIndex((x) => getId(x) === revealId);
+    if (i >= 0) setLimit((l) => Math.max(l, i + 1));
+  }, [revealId, items, getId]);
   const sentinel = useRef<HTMLLIElement>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 

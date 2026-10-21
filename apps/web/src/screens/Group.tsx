@@ -1,15 +1,20 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { formatLength, groupPlaylists, playlistTracks, totalDurationMs, type Group, type Playlist } from '@song-sleeve/core';
+import { formatLength, groupPlaylists, groupQueue, playlistTracks, totalDurationMs, type Group, type Playlist } from '@song-sleeve/core';
 import { useActions } from '../app/actions';
 import { useDialogs } from '../app/dialogs';
-import { useCatalog, useCatalogSelect } from '../app/hooks';
+import { useCatalog, useCatalogSelect, usePlayerValue } from '../app/hooks';
 import { useI18n } from '../app/i18n';
+import { player } from '../app/services';
+import { tipFor } from '../app/shortcuts';
+import { CollectionHeader } from '../components/CollectionHeader';
+import { GroupMenu } from '../components/CollectionMenus';
 import { EmptyState } from '../components/common';
 import { Icon } from '../components/Icon';
-import { Menu, MenuDivider, MenuItem } from '../components/Menu';
+import { Menu, MenuDivider, MenuItem, useContextMenu } from '../components/Menu';
 import { ReorderableList } from '../components/ReorderableList';
 import { GroupHero, PlaylistStack } from '../components/Sleeves';
+import { SyncControl } from '../components/SyncControl';
 
 const COLS = '44px minmax(0,2fr) 140px 120px 44px';
 
@@ -22,7 +27,10 @@ export default function GroupPage() {
   const s = useCatalog();
   const group = s.groups.get(id);
   const playlists = useCatalogSelect((st) => groupPlaylists(st, id), [id]);
-  const songCount = useCatalogSelect((st) => new Set(groupPlaylists(st, id).flatMap((p) => p.items.map((i) => i.track_id))).size, [id]);
+  // Every playlist in group order, its songs in playlist order, each song once.
+  const queue = useCatalogSelect((st) => groupQueue(st, id), [id]);
+  const songCount = queue.length;
+  const shuffle = usePlayerValue((p) => p.shuffle);
   const [menu, setMenu] = useState(false);
   const menuBtn = useRef<HTMLButtonElement>(null);
 
@@ -32,50 +40,44 @@ export default function GroupPage() {
 
   return (
     <>
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: 'var(--muted)' }}>
-        <Link to="/library" style={{ color: 'var(--white)' }}>
-          {t('common.breadcrumbLibrary')}
-        </Link>{' '}
-        <span aria-hidden="true">/</span> {t('library.chipGroups')}
-      </nav>
-      <header style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 24 }}>
-        <GroupHero />
-        <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-          <div className="kicker">{t('group.kicker')}</div>
-          <h1 className="page-title" style={{ margin: '6px 0 0', fontSize: 44, overflowWrap: 'anywhere' }}>
-            {group.name}
-          </h1>
-          <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--muted)' }}>
+      <CollectionHeader
+        crumbs={[{ label: t('common.breadcrumbLibrary'), to: '/library' }, { label: t('library.chipGroups'), to: '/library?show=groups' }, { label: group.name }]}
+        back="/library"
+        art={<GroupHero label={t('count.playlists', { n: playlists.length })} />}
+        kicker={t('group.kicker')}
+        title={group.name}
+        meta={
+          <span>
             {t('count.playlists', { n: playlists.length })} · {t('count.songs', { n: songCount })}
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px 10px 10px', borderRadius: 16, background: 'var(--charcoal)' }}>
-            <span style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--well)', color: 'var(--sand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="cloudCheck" size={20} />
-            </span>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{t('playlist.cloud')}</span>
           </span>
-          <button ref={menuBtn} type="button" className="round-btn" aria-haspopup="menu" aria-expanded={menu} aria-label={t('group.options')} onClick={() => setMenu((m) => !m)}>
-            <Icon name="more" />
-          </button>
-          {menu && (
-            <Menu anchor={menuBtn} onClose={() => setMenu(false)} label={t('group.options')} width={260}>
-              <MenuItem label={t('group.rename')} onSelect={() => (setMenu(false), dialogs.open({ kind: 'renameGroup', id: group.id }))} />
-              <MenuDivider />
-              <MenuItem label={t('group.delete')} sub={t('group.deleteSub')} danger onSelect={() => (setMenu(false), dialogs.open({ kind: 'deleteGroup', id: group.id }))} />
-            </Menu>
-          )}
-        </div>
-      </header>
+        }
+        end={
+          <>
+            <SyncControl spec={{ scope: 'group', id: group.id }} />
+            <button ref={menuBtn} type="button" className="round-btn" aria-haspopup="menu" aria-expanded={menu} aria-label={t('group.options')} onClick={() => setMenu((m) => !m)} style={menu ? { background: 'var(--well)' } : undefined}>
+              <Icon name="more" />
+            </button>
+            {menu && <GroupMenu group={group} anchor={menuBtn} onClose={() => setMenu(false)} />}
+          </>
+        }
+      />
 
-      <div style={{ marginTop: 30, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '.06em', color: 'var(--muted)' }}>{t('group.playlistsIn')}</h2>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => dialogs.open({ kind: 'addPlaylistsToGroup', groupId: group.id })}>
+      <div className="coll-ctrls">
+        <button type="button" className="btn btn-primary" disabled={queue.length === 0} onClick={() => void player.playList(queue, null, { kind: 'group', id: group.id, label: group.name })}>
+          <Icon name="play" size={18} />
+          {t('common.play')}
+        </button>
+        <button type="button" className={'round-btn' + (shuffle ? ' toggle-on' : '')} aria-label={t('player.shuffle')} aria-pressed={shuffle} data-tip={tipFor('shuffle', t)} onClick={() => player.setShuffle(!shuffle)}>
+          <Icon name="shuffle" size={20} />
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" style={{ minHeight: 44 }} onClick={() => dialogs.open({ kind: 'addPlaylistsToGroup', groupId: group.id })}>
           <Icon name="plus" size={16} />
           {t('group.addPlaylists')}
         </button>
+        {playlists.length > 1 && <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--muted)' }}>{t('common.dragHint')}</span>}
       </div>
+
+      <h2 style={{ margin: '30px 0 0', fontSize: 13, fontWeight: 600, letterSpacing: '.06em', color: 'var(--muted)' }}>{t('group.playlistsIn')}</h2>
 
       {playlists.length === 0 ? (
         <EmptyState
@@ -126,11 +128,21 @@ function GroupRow({ p, group, grip, locale }: { p: Playlist; group: Group; grip:
   const tracks = useCatalogSelect((st) => playlistTracks(st, p.id), [p.id]);
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
+  // Right-click opens the same in-group menu as the ⋯ button.
+  const context = useContextMenu();
+  const menuItems = (close: () => void) => (
+    <>
+      <MenuItem icon="pencil" label={t('group.renamePlaylist')} onSelect={() => (close(), dialogs.open({ kind: 'renamePlaylist', id: p.id }))} />
+      <MenuItem icon="minus" label={t('group.removeFromGroup')} onSelect={() => (close(), void actions.removeFromGroup(p.id, group))} />
+      <MenuDivider />
+      <MenuItem icon="trash" label={t('group.deletePlaylist')} sub={t('group.deletePlaylistSub')} danger onSelect={() => (close(), dialogs.open({ kind: 'deletePlaylist', id: p.id, fromGroupId: group.id }))} />
+    </>
+  );
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', columnGap: 14, minHeight: 76, padding: '0 6px', borderRadius: 16, background: 'var(--charcoal)' }}>
+    <div onContextMenu={context.onContextMenu} style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', columnGap: 14, minHeight: 76, padding: '0 6px', borderRadius: 16, background: 'var(--charcoal)' }}>
       {grip}
-      <Link to={`/playlists/${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, color: 'var(--white)', textDecoration: 'none', fontWeight: 600, fontSize: 16 }}>
-        <PlaylistStack size={58} inner={48} />
+      <Link to={`/playlists/${p.id}`} state={{ fromGroup: group.id }} style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, color: 'var(--white)', textDecoration: 'none', fontWeight: 600, fontSize: 16 }}>
+        <PlaylistStack size={52} songs={tracks.length} />
         <span className="ellipsis">{p.name}</span>
       </Link>
       <span className="mono" style={{ fontSize: 13, color: 'var(--muted)' }}>
@@ -144,10 +156,12 @@ function GroupRow({ p, group, grip, locale }: { p: Playlist; group: Group; grip:
       </button>
       {open && (
         <Menu anchor={btn} onClose={() => setOpen(false)} label={t('common.moreActions', { name: p.name })} width={260}>
-          <MenuItem label={t('group.renamePlaylist')} onSelect={() => (setOpen(false), dialogs.open({ kind: 'renamePlaylist', id: p.id }))} />
-          <MenuItem label={t('group.removeFromGroup')} onSelect={() => (setOpen(false), void actions.removeFromGroup(p.id, group))} />
-          <MenuDivider />
-          <MenuItem label={t('group.deletePlaylist')} sub={t('group.deletePlaylistSub')} danger onSelect={() => (setOpen(false), dialogs.open({ kind: 'deletePlaylist', id: p.id, fromGroupId: group.id }))} />
+          {menuItems(() => setOpen(false))}
+        </Menu>
+      )}
+      {context.at && (
+        <Menu anchor={context.at} onClose={context.close} label={t('common.moreActions', { name: p.name })} width={260}>
+          {menuItems(context.close)}
         </Menu>
       )}
     </div>

@@ -18,6 +18,21 @@ export function usePlayer(): PlayerState {
   return useSyncExternalStore(player.subscribe, player.getState);
 }
 
+/** One primitive value from the player state (re-renders only when it changes). */
+export function usePlayerValue<T extends string | number | boolean | null | undefined>(select: (s: PlayerState) => T): T {
+  return useSyncExternalStore(player.subscribe, () => select(player.getState()));
+}
+
+/** The current track's id; components re-render only when it changes, not on every tick. */
+export function useCurrentTrackId(): string | undefined {
+  return useSyncExternalStore(player.subscribe, () => player.getState().current?.id);
+}
+
+/** True while the player is actually playing; components re-render only when it flips. */
+export function useIsPlaying(): boolean {
+  return useSyncExternalStore(player.subscribe, () => player.getState().status === 'playing');
+}
+
 export function useUploads(): readonly UploadItem[] {
   return useSyncExternalStore(uploads.subscribe, uploads.getItems);
 }

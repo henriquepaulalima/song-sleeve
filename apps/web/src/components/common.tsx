@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { LOCALES, checkPassword, type Locale } from '@song-sleeve/core';
 import { useI18n, useT } from '../app/i18n';
 import { Icon, type IconName } from './Icon';
+import { Select } from './Select';
 
 export function Brand({ to, onSurface }: { to?: string; onSurface?: boolean }) {
   const inner = (
@@ -40,18 +41,17 @@ export function LangSelect({ value, onChange, className }: { value: Locale; onCh
   const t = useT();
   const id = useId();
   return (
-    <div className="select-wrap" style={{ width: 'auto' }}>
-      <label htmlFor={id} className="sr-only">
-        {t('common.language')}
-      </label>
-      <select id={id} className={className ?? 'lang-select'} value={value} onChange={(e) => onChange(e.target.value as Locale)}>
-        {LOCALES.map((l) => (
-          <option key={l.id} value={l.id} lang={l.id}>
-            {l.label}
-          </option>
-        ))}
-      </select>
-      <Icon name="chevronDown" />
+    <div style={{ display: 'inline-flex' }}>
+      <Select
+        id={id}
+        ariaLabel={t('common.language')}
+        value={value}
+        options={LOCALES.map((l) => ({ value: l.id, label: l.label, lang: l.id }))}
+        onChange={(v) => onChange(v as Locale)}
+        label={t('common.language')}
+        className={className ?? 'lang-select'}
+        minWidth={190}
+      />
     </div>
   );
 }
@@ -131,7 +131,8 @@ export function Dialog({
     const first = el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE);
     (first ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) {
+      // Escape inside a popover menu belongs to the menu.
+      if (e.key === 'Escape' && onClose && !(document.activeElement as Element | null)?.closest?.('.menu')) {
         e.stopPropagation();
         onClose();
       }
