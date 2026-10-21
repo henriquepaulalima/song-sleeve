@@ -1,0 +1,146 @@
+//go:build dev || production
+
+// Song Sleeve for desktop: the Wails shell (D-1) around the shared React UI.
+// Build with `make desktop` (Linux needs the webkit2_41 tag: Debian 13 and recent
+// Ubuntu ship only WebKitGTK 4.1).
+package main
+
+import (
+	"context"
+	"embed"
+	"io/fs"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/shell"
+)
+
+//go:embed all:frontend/dist
+var assets embed.FS
+
+// version is set at build time (-ldflags "-X main.version=…").
+var version = "0.1.0"
+
+func env(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// dataDir is app-private storage: ~/.local/share/song-sleeve on Linux,
+// %LocalAppData%\Song Sleeve on Windows.
+func dataDir() string {
+	if v := os.Getenv("SONG_SLEEVE_DATA_DIR"); v != "" {
+		return v
+	}
+	if runtime.GOOS == "windows" {
+		if v := os.Getenv("LOCALAPPDATA"); v != "" {
+			return filepath.Join(v, "Song Sleeve")
+		}
+	}
+	if v := os.Getenv("XDG_DATA_HOME"); v != "" {
+		return filepath.Join(v, "song-sleeve")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "share", "song-sleeve")
+}
+
+// sleeveRoot is the user-visible Song Sleeve folder in the home folder (§3).
+func sleeveRoot() string {
+	if v := os.Getenv("SONG_SLEEVE_FOLDER"); v != "" {
+		return v
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "Song Sleeve")
+}
+
+func openPath(p string) error {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("explorer", p).Start()
+	case "darwin":
+		return exec.Command("open", p).Start()
+	default:
+		return exec.Command("xdg-open", p).Start()
+	}
+}
+
+func main() {
+	var appCtx context.Context
+	audio := []wruntime.FileFilter{{DisplayName: "Music (MP3, AAC, FLAC, WAV)", Pattern: "*.mp3;*.m4a;*.aac;*.mp4;*.flac;*.wav;*.MP3;*.M4A;*.AAC;*.FLAC;*.WAV"}}
+	sh, err := shell.New(shell.Config{
+		APIBase:    env("SONG_SLEEVE_API", "http://localhost:8088/api"),
+		Version:    version,
+		DataDir:    dataDir(),
+		SleeveRoot: sleeveRoot(),
+		// For development without a keyring daemon.
+		FileCredentials: os.Getenv("SONG_SLEEVE_FILE_CREDENTIALS") == "1",
+		Hooks: shell.Hooks{
+			Emit: func(name string, data any) {
+				if appCtx != nil {
+					wruntime.EventsEmit(appCtx, name, data)
+				}
+			},
+			PickFiles: func(folder bool, title string) ([]string, error) {
+				if folder {
+					p, err := wruntime.OpenDirectoryDialog(appCtx, wruntime.OpenDialogOptions{Title: title})
+					if err != nil || p == "" {
+						return nil, err
+					}
+					return []string{p}, nil
+				}
+				return wruntime.OpenMultipleFilesDialog(appCtx, wruntime.OpenDialogOptions{Title: title, Filters: audio})
+			},
+			Confirm: func(title, message string) bool {
+				r, err := wruntime.MessageDialog(appCtx, wruntime.MessageDialogOptions{
+					Type: wruntime.QuestionDialog, Title: title, Message: message,
+					Buttons: []string{"Delete", "Keep for now"}, DefaultButton: "Keep for now", CancelButton: "Keep for now",
+				})
+				return err == nil && (r == "Delete" || r == "Yes")
+			},
+			Open: openPath,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	dist, err := fs.Sub(assets, "frontend/dist")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = wails.Run(&options.App{
+		Title:            "Song Sleeve",
+		Width:            1280,
+		Height:           820,
+		MinWidth:         960,
+		MinHeight:        640,
+		BackgroundColour: &options.RGBA{R: 0x2D, G: 0x2D, B: 0x2A, A: 255},
+		AssetServer:      &assetserver.Options{Assets: dist, Handler: sh},
+		OnStartup: func(ctx context.Context) {
+			appCtx = ctx
+			sh.Restore(ctx)
+		},
+		OnShutdown: func(context.Context) { sh.Shutdown() },
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "app.songsleeve.desktop",
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) {
+				wruntime.WindowUnminimise(appCtx)
+				wruntime.Show(appCtx)
+			},
+		},
+		Linux: &linux.Options{ProgramName: "song-sleeve", WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
