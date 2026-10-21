@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library Cards Proposal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Tokens copied from apps/web/src/styles/app.css (dark only). */
+  :root {
+    --graphite: #2d2d2a; --charcoal: #4c4c47; --sand: #e5dcc5; --orange: #f26419;
+    --well: #3a3a36; --track: #252522; --raised: #5e5e58; --raised-2: #6e6e67; --hover: #56564f;
+    --ink: #161615; --white: #fff; --text-soft: #edeae2; --muted: #d9d5ca; --muted-2: #ccc8bc; --muted-3: #ada99e;
+    --shadow-card: inset 0 1px 0 rgba(255,255,255,.07), 0 14px 24px -16px rgba(0,0,0,.75);
+    --font-ui: 'Instrument Sans', system-ui, sans-serif;
+    --font-display: 'Archivo', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--graphite); color: var(--white); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1240px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 40px; margin: 0; }
+  h2 { font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 22px; margin: 56px 0 6px; }
+  p.lead { color: var(--muted); max-width: 760px; line-height: 1.5; margin: 10px 0 0; }
+  p.note { color: var(--muted-2); font-size: 14px; line-height: 1.5; max-width: 760px; margin: 4px 0 18px; }
+  .kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em; color: var(--muted-2); text-transform: uppercase; margin: 0 0 10px; }
+  svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Grid and cards (same as .lcard) */
+  .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 28px; }
+  .panel { background: #262624; border-radius: 22px; padding: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .lcard { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 18px; background: var(--charcoal); box-shadow: var(--shadow-card); min-width: 0; cursor: pointer; }
+  .lcard:hover { background: var(--hover); }
+  .lcard.playing { box-shadow: var(--shadow-card), inset 0 0 0 1.5px var(--sand); }
+  .meta { display: flex; flex-direction: column; gap: 3px; padding: 0 4px 4px; min-width: 0; }
+  .name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { font-size: 12.5px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+  .kind { font-weight: 700; color: var(--white); letter-spacing: .04em; font-size: 10.5px; text-transform: uppercase; }
+  svg.i.kind-ic { width: 14px; height: 14px; color: var(--sand); }
+  .art { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; }
+
+  /* Song: unchanged */
+  .art.song { background: var(--well); color: var(--sand); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .art.song::after { content: ''; position: absolute; inset: 9px; border-radius: 7px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .art.song.on { background: var(--sand); color: var(--ink); }
+
+  /* Playlist (proposed): a 2×2 mosaic of song sleeves */
+  .art.playlist { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 5px; padding: 0; }
+  .art.playlist span { border-radius: 8px; display: flex; align-items: center; justify-content: center; color: rgba(229,220,197,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .art.playlist span:nth-child(1) { background: var(--well); border-top-left-radius: 12px; }
+  .art.playlist span:nth-child(2) { background: var(--well); border-top-right-radius: 12px; }
+  .art.playlist span:nth-child(3) { background: var(--well); border-bottom-left-radius: 12px; }
+  .art.playlist span:nth-child(4) { background: var(--well); border-bottom-right-radius: 12px; }
+  .art.playlist svg.i { width: 18px; height: 18px; }
+  .art.playlist.few span:nth-child(n+3) { color: transparent; }
+
+  /* Group (proposed): a folder holding playlist mosaics */
+  .art.group { display: flex; align-items: flex-end; justify-content: center; padding: 4% 3% 0; }
+  .folder { position: relative; width: 100%; height: 100%; }
+  .folder .back { position: absolute; inset: 16% 0 0 0; background: var(--raised); border-radius: 4px 12px 12px 12px; }
+  .folder .tab { position: absolute; left: 0; top: 0; width: 40%; height: 20%; background: var(--raised); border-radius: 10px 10px 0 0; }
+  .folder .tab::after { display: none; }
+  .folder .peek { position: absolute; top: 22%; width: 36%; aspect-ratio: 1; border-radius: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; background: var(--well); box-shadow: 0 -4px 10px -4px rgba(0,0,0,.5); }
+  .folder .peek i { border-radius: 2px; background: var(--raised-2); }
+  .folder .peek i:nth-child(2n) { background: var(--charcoal); }
+  .folder .peek.p1 { left: 14%; transform: rotate(-6deg); }
+  .folder .peek.p2 { left: 48%; top: 26%; transform: rotate(5deg); }
+  .folder .front { position: absolute; left: 0; right: 0; bottom: 0; height: 52%; border-radius: 12px; background: linear-gradient(180deg, #74746d, #5c5c55); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 -6px 14px -8px rgba(0,0,0,.6); display: flex; align-items: flex-end; justify-content: flex-end; padding: 8px 10px; color: var(--sand); }
+  .folder .count { font-family: var(--font-mono); font-size: 11px; color: var(--text-soft); background: rgba(22,22,21,.35); border-radius: 999px; padding: 2px 8px; }
+
+  /* Current (for comparison): copied from screens/Library.tsx CardArt */
+  .cur-pl .b1 { position: absolute; left: 14%; right: 0; top: 0; bottom: 14%; border-radius: 12px; background: var(--raised); }
+  .cur-pl .b2 { position: absolute; left: 0; right: 14%; top: 14%; bottom: 0; border-radius: 12px; background: var(--well); color: var(--sand); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+  .cur-gr { display: flex; align-items: center; justify-content: center; }
+  .cur-gr .w { position: relative; width: 84px; height: 84px; }
+  .cur-gr .w span { position: absolute; width: 68px; height: 68px; border-radius: 10px; }
+  .cur-gr .s1 { left: 16px; top: -2px; background: var(--raised-2); transform: rotate(12deg); }
+  .cur-gr .s2 { left: 8px; top: 5px; background: var(--raised); transform: rotate(5deg); }
+  .cur-gr .s3 { left: 0; top: 14px; background: var(--well); color: var(--sand); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+
+  /* Animated equalizer (item 8) */
+  .eq { display: flex; align-items: flex-end; gap: 4px; height: 38px; }
+  .eq b { width: 6px !important; }
+  .eq b { width: 5px; border-radius: 2px; background: currentColor; animation: eq 1s ease-in-out infinite; }
+  .eq b:nth-child(1) { height: 40%; animation-delay: -.2s; }
+  .eq b:nth-child(2) { height: 100%; animation-delay: -.6s; }
+  .eq b:nth-child(3) { height: 65%; animation-delay: -.4s; }
+  @keyframes eq { 0%,100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+  .eq b { transform-origin: bottom; }
+  @media (prefers-reduced-motion: reduce) { .eq b { animation: none; } }
+
+  /* Icon sheet */
+  .icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .ic { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; background: var(--charcoal); }
+  .ic svg.i { color: var(--sand); width: 28px; height: 28px; }
+  .ic .t { display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-weight: 600; }
+  .ic .t small { font-weight: 400; color: var(--muted-2); font-size: 12px; }
+  .ic.old { opacity: .55; }
+
+  /* Sidebar preview */
+  .side-wrap { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  .sidebar { width: 260px; height: 560px; background: var(--charcoal); border-radius: 18px; padding: 22px 14px 16px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px; font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 19px; }
+  .brand i { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(90deg, var(--ink) 50%, var(--orange) 50%); }
+  .nav { margin-top: 22px; display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 12px; border-radius: 12px; font-size: 15px; font-weight: 500; color: var(--white); text-decoration: none; }
+  .nav a.on { background: var(--sand); color: var(--ink); font-weight: 700; }
+  .nav svg.i { width: 20px; height: 20px; }
+  .lists { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 14px; }
+  .sec { display: flex; flex-direction: column; min-height: 0; }
+  .sec.open { flex: 0 1 auto; }
+  .sec-h { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 4px; padding: 6px 12px; border: 0; background: none; border-radius: 8px; color: var(--muted-2); font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em; cursor: pointer; }
+  .sec-h:hover { background: var(--well); }
+  .sec-h svg.i { width: 14px; height: 14px; transition: transform .15s; }
+  .sec:not(.open) .sec-h svg.i { transform: rotate(-90deg); }
+  .sec-b { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
+  .sec:not(.open) .sec-b { display: none; }
+  .side-l { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 14px; color: var(--text-soft); flex: none; }
+  .side-l svg.i { width: 16px; height: 16px; color: var(--sand); }
+  .side-l.on { background: var(--well); color: var(--white); font-weight: 700; }
+  .acct { margin-top: 12px; padding: 10px; display: flex; align-items: center; gap: 10px; border-radius: 12px; font-size: 13px; color: var(--muted); }
+  .acct b { width: 30px; height: 30px; border-radius: 50%; background: var(--sand); color: var(--ink); display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .sec-b::-webkit-scrollbar { width: 8px; } .sec-b::-webkit-scrollbar-thumb { background: var(--raised); border-radius: 8px; }
+  ul.bullets { color: var(--muted); font-size: 14px; line-height: 1.6; padding-left: 18px; max-width: 520px; margin: 0; }
+  @media (max-width: 600px) { .grid { grid-template-columns: repeat(2, 1fr); } h1 { font-size: 30px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="songs" viewBox="0 0 24 24"><path d="M21 15V6"/><circle cx="18.5" cy="15.5" r="2.5"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></symbol>
+    <symbol id="layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+    <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="folder" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></symbol>
+    <symbol id="shelf" viewBox="0 0 24 24"><rect x="3" y="4" width="4" height="16" rx="1"/><rect x="8.5" y="7" width="4" height="13" rx="1"/><path d="m14.6 6.4 3.8-1 3.7 13.6-3.8 1z"/></symbol>
+    <symbol id="home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></symbol>
+    <symbol id="artist" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/></symbol>
+    <symbol id="gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  </defs>
+</svg>
+
+<main class="page">
+  <p class="kicker">Proposal · fixes checklist item 16 (also 8, 10, 17, 21)</p>
+  <h1>Library cards</h1>
+  <p class="lead">The problem is the Library grid: songs, playlists and groups all use the same square card with a thin line icon, so you can't tell them apart at a glance. In this proposal each kind gets its own <strong>shape</strong>, not just a different icon. A song stays one sleeve, a playlist becomes a 2×2 mosaic of sleeves, and a group becomes a folder. The sidebar icons follow the same idea.</p>
+
+  <h2>Before and after</h2>
+  <p class="note">The same items, current design on the left and proposal on the right. The "Rise" card shows the playing state with the animated equalizer from item 8.</p>
+  <div class="compare">
+    <section class="panel" aria-label="Current">
+      <p class="kicker">Current</p>
+      <div class="grid">
+        <div class="lcard"><div class="art cur-gr"><div class="w"><span class="s1"></span><span class="s2"></span><span class="s3"><svg class="i"><use href="#layers"/></svg></span></div></div><div class="meta"><span class="name">Fantasy Playlists</span><span class="sub"><span class="kind">Group</span>· 2 playlists</span></div></div>
+        <div class="lcard"><div class="art cur-pl"><span class="b1"></span><span class="b2"><svg class="i" style="width:30px;height:30px"><use href="#songs"/></svg></span></div><div class="meta"><span class="name">Tavern Songs</span><span class="sub"><span class="kind">Playlist</span>· 10 songs</span></div></div>
+        <div class="lcard"><div class="art song"><svg class="i" style="width:34px;height:34px"><use href="#note"/></svg></div><div class="meta"><span class="name">Sera Was Never</span><span class="sub"><span class="kind">Song</span>· Raney Shockne</span></div></div>
+        <div class="lcard"><div class="art cur-pl"><span class="b1"></span><span class="b2"><svg class="i" style="width:30px;height:30px"><use href="#songs"/></svg></span></div><div class="meta"><span class="name">Boss Fights</span><span class="sub"><span class="kind">Playlist</span>· 2 songs</span></div></div>
+        <div class="lcard"><div class="art song"><svg class="i" style="width:34px;height:34px"><use href="#note"/></svg></div><div class="meta"><span class="name">Rise</span><span class="sub"><span class="kind">Song</span>· Raney Shockne</span></div></div>
+        <div class="lcard"><div class="art song"><svg class="i" style="width:34px;height:34px"><use href="#note"/></svg></div><div class="meta"><span class="name">Bard Maker</span><span class="sub"><span class="kind">Song</span>· Raney Shockne</span></div></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Proposed">
+      <p class="kicker">Proposed</p>
+      <div class="grid">
+        <div class="lcard">
+          <div class="art group"><div class="folder"><span class="tab"></span><span class="back"></span><span class="front"><span class="count">2 playlists</span></span></div></div>
+          <div class="meta"><span class="name">Fantasy Playlists</span><span class="sub"><svg class="i kind-ic"><use href="#folder"/></svg><span class="kind">Group</span>· 2 playlists</span></div>
+        </div>
+        <div class="lcard">
+          <div class="art playlist"><span><svg class="i"><use href="#note"/></svg></span><span><svg class="i"><use href="#note"/></svg></span><span><svg class="i"><use href="#note"/></svg></span><span><svg class="i"><use href="#note"/></svg></span></div>
+          <div class="meta"><span class="name">Tavern Songs</span><span class="sub"><svg class="i kind-ic"><use href="#grid"/></svg><span class="kind">Playlist</span>· 10 songs</span></div>
+        </div>
+        <div class="lcard">
+          <div class="art song"><svg class="i" style="width:34px;height:34px"><use href="#note"/></svg></div>
+          <div class="meta"><span class="name">Sera Was Never</span><span class="sub"><svg class="i kind-ic"><use href="#note"/></svg><span class="kind">Song</span>· Raney Shockne</span></div>
+        </div>
+        <div class="lcard">
+          <div class="art playlist few"><span><svg class="i"><use href="#note"/></svg></span><span><svg class="i"><use href="#note"/></svg></span><span></span><span></span></div>
+          <div class="meta"><span class="name">Boss Fights</span><span class="sub"><svg class="i kind-ic"><use href="#grid"/></svg><span class="kind">Playlist</span>· 2 songs</span></div>
+        </div>
+        <div class="lcard playing">
+          <div class="art song on"><span class="eq" aria-label="Playing"><b></b><b></b><b></b></span></div>
+          <div class="meta"><span class="name" style="color:var(--sand)">Rise</span><span class="sub"><svg class="i kind-ic"><use href="#note"/></svg><span class="kind">Song</span>· Playing</span></div>
+        </div>
+        <div class="lcard">
+          <div class="art song"><svg class="i" style="width:34px;height:34px"><use href="#note"/></svg></div>
+          <div class="meta"><span class="name">Bard Maker</span><span class="sub"><svg class="i kind-ic"><use href="#note"/></svg><span class="kind">Song</span>· Raney Shockne</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <h2>Details</h2>
+  <ul class="bullets">
+    <li><strong>Playlist mosaic:</strong> one tile per song, up to four. All four tiles share the same colour. A playlist with fewer songs shows plain tiles without the note ("Boss Fights"), and an empty playlist shows four plain tiles. When songs get cover art later, the tiles become the first four covers, the usual pattern in music apps.</li>
+    <li><strong>Group folder:</strong> a plain folder whose front shows the playlist count.</li>
+    <li><strong>Small kind icon</strong> before the SONG / PLAYLIST / GROUP label, so the kind is clear even in text.</li>
+    <li>The same art is used on Home, in the Playlist and Group page headers, and in the pickers.</li>
+  </ul>
+
+  <h2>Icons</h2>
+  <p class="note">The 2×2 grid moves from Library to Playlist, so Library gets "books on a shelf". The faded tiles are the current icons being replaced.</p>
+  <div class="icons">
+    <div class="ic"><svg class="i"><use href="#shelf"/></svg><span class="t">Library<small>new: books on a shelf</small></span></div>
+    <div class="ic"><svg class="i"><use href="#grid"/></svg><span class="t">Playlist<small>new: 2×2 grid</small></span></div>
+    <div class="ic"><svg class="i"><use href="#folder"/></svg><span class="t">Group<small>new: folder</small></span></div>
+    <div class="ic"><svg class="i"><use href="#note"/></svg><span class="t">Song<small>unchanged</small></span></div>
+    <div class="ic"><svg class="i"><use href="#gear"/></svg><span class="t">Settings<small>new: gear (item 10)</small></span></div>
+    <div class="ic old"><svg class="i"><use href="#grid"/></svg><span class="t">Library<small>current</small></span></div>
+    <div class="ic old"><svg class="i"><use href="#songs"/></svg><span class="t">Playlist<small>current</small></span></div>
+    <div class="ic old"><svg class="i"><use href="#layers"/></svg><span class="t">Group<small>current</small></span></div>
+  </div>
+
+  <h2>Sidebar with these icons</h2>
+  <p class="note">Also previews items 17 (no Profile entry; the account link opens Profile), 21 (collapsible lists, saved per device) and 3 (only the lists scroll; the nav and account link stay put). Click PLAYLISTS or GROUPS to collapse them.</p>
+  <div class="side-wrap">
+    <nav class="sidebar" aria-label="Sidebar preview">
+      <div class="brand"><i></i>Song Sleeve</div>
+      <div class="nav">
+        <a href="#" class=""><svg class="i"><use href="#home"/></svg>Home</a>
+        <a href="#" class="on"><svg class="i"><use href="#shelf"/></svg>Library</a>
+        <a href="#"><svg class="i"><use href="#songs"/></svg>Songs</a>
+        <a href="#"><svg class="i"><use href="#artist"/></svg>Artists</a>
+        <a href="#"><svg class="i"><use href="#gear"/></svg>Settings</a>
+      </div>
+      <div class="lists">
+        <div class="sec open" id="s-pl">
+          <button class="sec-h" aria-expanded="true">PLAYLISTS<svg class="i"><use href="#chev"/></svg></button>
+          <div class="sec-b">
+            <div class="side-l on"><svg class="i"><use href="#grid"/></svg>Tavern Songs</div>
+            <div class="side-l"><svg class="i"><use href="#grid"/></svg>Boss Fights</div>
+            <div class="side-l"><svg class="i"><use href="#grid"/></svg>Road Trip</div>
+            <div class="side-l"><svg class="i"><use href="#grid"/></svg>Focus</div>
+            <div class="side-l"><svg class="i"><use href="#grid"/></svg>Morning</div>
+            <div class="side-l"><svg class="i"><use href="#grid"/></svg>Rainy Days</div>
+            <div class="side-l"><svg class="i"><use href="#grid"/></svg>Workout</div>
+          </div>
+        </div>
+        <div class="sec open" id="s-gr">
+          <button class="sec-h" aria-expanded="true">GROUPS<svg class="i"><use href="#chev"/></svg></button>
+          <div class="sec-b">
+            <div class="side-l"><svg class="i"><use href="#folder"/></svg>Fantasy Playlists</div>
+            <div class="side-l"><svg class="i"><use href="#folder"/></svg>Game Soundtracks</div>
+          </div>
+        </div>
+      </div>
+      <div class="acct"><b>H</b>henrique.p.lima0@gmail.com</div>
+    </nav>
+  </div>
+</main>
+<script>
+  document.querySelectorAll('.sec-h').forEach((b) => b.addEventListener('click', () => {
+    const s = b.parentElement; const open = s.classList.toggle('open'); b.setAttribute('aria-expanded', open);
+  }));
+</script>
+</body>
+</html>

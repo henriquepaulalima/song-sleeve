@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 2 Proposal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112..125,800&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Tokens copied from apps/web/src/styles/app.css (the app is dark only). */
+  :root {
+    --graphite: #2d2d2a; --charcoal: #4c4c47; --sand: #e5dcc5; --orange: #f26419;
+    --well: #3a3a36; --track: #252522; --raised: #5e5e58; --raised-2: #6e6e67; --hover: #56564f;
+    --ink: #161615; --white: #fff; --text-soft: #edeae2; --muted: #d9d5ca; --muted-2: #ccc8bc; --muted-3: #ada99e;
+    --disabled-bg: #5a5a54; --disabled-fg: #8e8b82;
+    --shadow-card: inset 0 1px 0 rgba(255,255,255,.07), 0 14px 24px -16px rgba(0,0,0,.75);
+    --shadow-dialog: inset 0 1px 0 rgba(255,255,255,.08), 0 50px 80px -24px rgba(0,0,0,.95);
+    --shadow-menu: inset 0 1px 0 rgba(255,255,255,.08), 0 30px 50px -16px rgba(0,0,0,.95);
+    --font-ui: 'Instrument Sans', system-ui, sans-serif;
+    --font-display: 'Archivo', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--graphite); color: var(--white); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .doc { max-width: 1280px; margin: 0 auto; padding: 40px 16px 100px; }
+  .doc > h1 { font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 40px; margin: 0; }
+  .lead { color: var(--muted); max-width: 820px; line-height: 1.5; margin: 10px 0 0; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
+  .toc a { display: inline-flex; min-height: 34px; align-items: center; padding: 0 14px; border-radius: 999px; background: var(--charcoal); text-decoration: none; font-size: 13px; font-weight: 600; }
+  section.s { margin-top: 64px; }
+  section.s > h2 { font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 24px; margin: 0; }
+  .items { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; color: var(--muted-3); text-transform: uppercase; margin: 0 0 8px; }
+  .why { color: var(--muted-2); font-size: 14px; line-height: 1.55; max-width: 860px; margin: 8px 0 20px; }
+  .why b { color: var(--white); font-weight: 600; }
+  .why ul { margin: 6px 0 0; padding-left: 20px; }
+  .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-3); margin: 0 0 10px; }
+  .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 24px; }
+  .panel { background: #262624; border-radius: 22px; padding: 22px; min-width: 0; overflow: hidden; }
+
+  svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; display: block; }
+  svg.i .f { fill: currentColor; stroke: none; }
+
+  /* --- App primitives (same look as app.css) --- */
+  .page-title { font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 44px; letter-spacing: -0.02em; line-height: 1.05; margin: 0; }
+  .page-sub { margin: 6px 0 0; font-size: 15px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 20px; border-radius: 14px; border: 0; font: 600 15px var(--font-ui); cursor: pointer; white-space: nowrap; color: var(--white); }
+  .btn svg.i { width: 18px; height: 18px; }
+  .btn-primary { background: var(--orange); color: var(--ink); box-shadow: inset 0 2px 0 rgba(255,255,255,.22); }
+  .btn-secondary { background: transparent; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
+  .btn-sm { min-height: 44px; padding: 0 16px; font-size: 14px; }
+  .round-btn { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--charcoal); color: var(--white); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; position: relative; }
+  .round-btn.sm { width: 40px; height: 40px; }
+  .round-btn.on { color: var(--orange); }
+  .round-btn.on::after { content: ''; position: absolute; bottom: 6px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--orange); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: var(--white); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+  .icon-btn:disabled { color: var(--disabled-fg); }
+  .kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: .18em; color: var(--muted-2); text-transform: uppercase; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--sand); color: var(--ink); font: 600 14px var(--font-ui); white-space: nowrap; }
+  .chip svg.i { width: 16px; height: 16px; }
+  .chip small { font-weight: 500; opacity: .7; }
+  .search { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 16px; border-radius: 14px; background: var(--charcoal); color: var(--muted-3); font-size: 15px; flex: 1 1 280px; min-width: 0; max-width: 460px; }
+  .search svg.i { width: 18px; height: 18px; }
+  .tip { position: absolute; z-index: 5; white-space: nowrap; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; background: var(--ink); color: var(--white); box-shadow: var(--shadow-menu); pointer-events: none; }
+
+  /* --- Window frame for the mock screens --- */
+  .win { border-radius: 16px; background: var(--graphite); box-shadow: 0 0 0 1px rgba(255,255,255,.07), 0 30px 60px -30px rgba(0,0,0,.9); overflow: hidden; position: relative; }
+  .win-main { padding: 28px 32px 34px; position: relative; }
+
+  /* --- 12. Standard header --- */
+  .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 24px; }
+  .page-head .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .toolbar { margin-top: 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .toolbar .grow { flex: 1; }
+
+  /* --- 14. Sync control --- */
+  .sync { display: inline-flex; align-items: center; gap: 4px; min-height: 48px; padding: 0 4px 0 14px; border-radius: 999px; background: var(--charcoal); }
+  .sync .lbl { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin-right: 6px; white-space: nowrap; }
+  .sync .lbl svg.i { width: 18px; height: 18px; color: var(--sand); }
+  .switch { position: relative; width: 52px; height: 32px; border-radius: 999px; border: 0; background: var(--raised-2); cursor: pointer; flex: none; padding: 0; }
+  .switch span { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--white); transition: left .15s; }
+  .switch[aria-checked='true'] { background: var(--sand); }
+  .switch[aria-checked='true'] span { left: 24px; background: var(--ink); }
+  .switch.busy span { animation: pulse 1s ease-in-out infinite; }
+  .switch:disabled { background: var(--disabled-bg); cursor: not-allowed; }
+  .switch:disabled span { background: var(--disabled-fg); }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .sync .det { position: relative; width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin-left: 4px; }
+  .sync .det:hover { background: var(--hover); color: var(--white); }
+  .sync .det svg.i { width: 20px; height: 20px; }
+  .sync .det .badge { position: absolute; top: 4px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--orange); color: var(--ink); font: 700 10px/16px var(--font-ui); text-align: center; }
+  .sync.off-acct .lbl { color: var(--disabled-fg); }
+  .states { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px 24px; }
+  .state p { margin: 10px 0 0; font-size: 13px; color: var(--muted-2); line-height: 1.45; }
+
+  /* Toast */
+  .toast { display: inline-flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 8px 0 16px; border-radius: 14px; background: var(--sand); color: var(--ink); font-size: 14px; font-weight: 600; box-shadow: var(--shadow-menu); }
+  .toast svg.i { width: 20px; height: 20px; }
+  .toast a { font-weight: 700; padding: 8px 10px; border-radius: 10px; }
+
+  /* Dialog */
+  .scrim { position: relative; padding: 40px 16px; background: rgba(20,20,19,.72); display: flex; justify-content: center; border-radius: 16px; }
+  .dialog { width: 100%; max-width: 560px; border-radius: 26px; padding: 28px; background: var(--charcoal); box-shadow: var(--shadow-dialog); position: relative; }
+  .dialog h3 { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: 26px; margin: 0; padding-right: 50px; }
+  .dialog .x { position: absolute; top: 22px; right: 22px; width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--well); color: var(--white); display: flex; align-items: center; justify-content: center; }
+  .dialog .x svg.i { width: 18px; height: 18px; }
+  .dialog .acts { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+  .switch-row { margin-top: 18px; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: var(--well); }
+  .switch-row .t { flex: 1; min-width: 0; }
+  .switch-row strong { display: block; font-size: 15px; }
+  .switch-row span.s { display: block; margin-top: 3px; font-size: 13px; color: var(--muted-2); line-height: 1.4; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 0; }
+  .stats div { padding: 12px 14px; border-radius: 14px; background: var(--well); }
+  .stats dt { font-size: 12px; color: var(--muted-2); }
+  .stats dd { margin: 4px 0 0; font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: 24px; }
+  .stats .warn dd { color: var(--orange); }
+  .note { display: flex; gap: 10px; margin: 14px 0 0; font-size: 13px; color: var(--muted-2); line-height: 1.5; }
+  .note svg.i { width: 18px; height: 18px; color: var(--sand); margin-top: 1px; }
+  .prog { margin-top: 10px; height: 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .prog i { display: block; height: 100%; width: 42%; background: var(--sand); border-radius: inherit; }
+
+  /* --- 13. Collection header (playlist + group share it) --- */
+  .crumbs { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  .crumbs .back { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--charcoal); color: var(--white); display: inline-flex; align-items: center; justify-content: center; }
+  .crumbs .back svg.i { width: 18px; height: 18px; }
+  .crumbs a { color: var(--white); }
+  .crumbs .sep { color: var(--muted-3); }
+  .coll-head { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px; }
+  .coll-head .info { flex: 1 1 300px; min-width: 0; }
+  .coll-head h1 { font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 44px; letter-spacing: -0.02em; line-height: 1.05; margin: 6px 0 0; }
+  .coll-head .meta { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .coll-head .end { display: flex; align-items: center; gap: 10px; }
+  .pill-link { display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; background: var(--charcoal); font-size: 13px; text-decoration: none; }
+  .ctrls { margin-top: 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .ctrls .hint { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .hero-pl { width: 160px; height: 160px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: none; }
+  .hero-pl span { border-radius: 12px; background: var(--well); color: rgba(229,220,197,.6); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 18px 30px -18px rgba(0,0,0,.9); }
+  .hero-pl span:empty { color: transparent; }
+  .hero-gr { width: 160px; height: 160px; position: relative; flex: none; }
+  .hero-gr .tab { position: absolute; left: 6%; top: 12%; width: 40%; height: 18%; border-radius: 12px 12px 0 0; background: var(--raised); }
+  .hero-gr .back { position: absolute; left: 6%; right: 6%; top: 24%; bottom: 10%; border-radius: 6px 16px 16px 16px; background: var(--raised); }
+  .hero-gr .front { position: absolute; left: 6%; right: 6%; bottom: 10%; height: 50%; border-radius: 16px; background: linear-gradient(180deg, #74746d, #5c5c55); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 18px 30px -18px rgba(0,0,0,.9); display: flex; align-items: flex-end; justify-content: flex-end; padding: 10px; }
+  .hero-gr .count { font-family: var(--font-mono); font-size: 11px; color: var(--text-soft); background: rgba(22,22,21,.35); border-radius: 999px; padding: 2px 8px; }
+
+  /* Song rows (same as .song-row) */
+  .th-row, .srow { display: grid; grid-template-columns: 28px minmax(0,2fr) minmax(0,1.2fr) 150px 60px 44px; column-gap: 14px; align-items: center; }
+  .th-row { padding: 0 8px 6px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; color: var(--muted-2); }
+  .srow { min-height: 60px; padding: 0 8px; border-radius: 16px; background: var(--charcoal); margin-top: 6px; font-size: 15px; }
+  .srow.hl { background: var(--hover); box-shadow: inset 0 0 0 1.5px var(--sand); }
+  .srow .t { display: flex; align-items: center; gap: 12px; min-width: 0; font-weight: 600; }
+  .srow .th { width: 40px; height: 40px; border-radius: 10px; background: var(--well); color: var(--sand); display: flex; align-items: center; justify-content: center; flex: none; }
+  .srow .th svg.i { width: 20px; height: 20px; }
+  .srow .a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srow .grip { color: var(--muted-3); }
+  .srow .grip svg.i { width: 18px; height: 18px; }
+  .badge-st { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .badge-st { justify-self: start; }
+  .badge-st.dev { padding: 3px 8px; border-radius: 6px; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); color: var(--white); }
+  .badge-st svg.i { width: 15px; height: 15px; }
+  .mono { font-family: var(--font-mono); font-size: 13px; color: var(--muted); text-align: right; }
+
+  /* Menu */
+  .menu { position: absolute; z-index: 6; width: 270px; padding: 6px; border-radius: 18px; background: var(--well); box-shadow: var(--shadow-menu); }
+  .mi { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 12px; font-size: 14.5px; }
+  .mi svg.i { width: 18px; height: 18px; color: var(--sand); }
+  .mi.danger, .mi.danger svg.i { color: var(--orange); }
+  .mi.hov { background: var(--hover); }
+  .mi .sub { font-size: 12px; color: var(--muted-2); display: block; margin-top: 2px; }
+  .mi .chev { margin-left: auto; color: var(--muted-3); }
+  .mdiv { height: 1px; margin: 6px 10px; background: rgba(255,255,255,.1); }
+  .mhead { padding: 8px 12px 6px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; color: var(--muted-3); text-transform: uppercase; }
+  .cursor { position: absolute; z-index: 7; width: 18px; height: 22px; pointer-events: none; }
+
+  /* --- Player bar --- */
+  .pbar { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 20px; min-height: 96px; padding: 0 24px; background: #4a4a45; border-radius: 0 0 16px 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+  .pbar-now { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .pbar-sleeve { width: 56px; height: 56px; border-radius: 12px; background: var(--well); color: var(--sand); display: flex; align-items: center; justify-content: center; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+  .pbar-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .pbar-txt .n { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pbar-txt .ar { font-size: 13px; color: var(--muted-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pbar-txt .ar.hov { color: var(--white); text-decoration: underline; text-underline-offset: 3px; }
+  .from { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; min-width: 96px; max-width: 200px; padding: 0 12px; border-radius: 999px; background: rgba(22,22,21,.22); font-size: 13px; color: var(--text-soft); text-decoration: none; flex: none; margin-left: 6px; }
+  .from svg.i { width: 15px; height: 15px; color: var(--sand); }
+  .from span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pbar-ctl { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .pbar-btns { display: flex; align-items: center; gap: 8px; }
+  .pbar-btns svg.i { width: 22px; height: 22px; }
+  .pp { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--orange); color: var(--ink); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 0 rgba(255,255,255,.22); }
+  .pp svg.i { width: 24px; height: 24px; }
+  .seek { display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--muted-2); width: min(520px, 42vw); }
+  .seek .tr { flex: 1; height: 4px; border-radius: 999px; background: var(--track); position: relative; }
+  .seek .tr i { position: absolute; left: 0; top: 0; bottom: 0; width: 30%; border-radius: inherit; background: var(--sand); }
+  .seek .tr b { position: absolute; left: 30%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--white); }
+  .pbar-side { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .pbar-side .round-btn svg.i { width: 20px; height: 20px; }
+  .ghost { opacity: .35; }
+  .centre-demo { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+  .centre-demo figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-2); }
+  .centre-demo .pp { position: relative; width: 84px; height: 84px; }
+  .centre-demo .pp svg.i { width: 38px; height: 38px; }
+  .centre-demo .pp::before, .centre-demo .pp::after { content: ''; position: absolute; background: rgba(22,22,21,.4); }
+  .centre-demo .pp::before { left: 50%; top: 8px; bottom: 8px; width: 1px; }
+  .centre-demo .pp::after { top: 50%; left: 8px; right: 8px; height: 1px; }
+
+  /* Library cards (from round 1) */
+  .lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; margin-top: 18px; }
+  .lcard { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 18px; background: var(--charcoal); box-shadow: var(--shadow-card); min-width: 0; position: relative; }
+  .lcard.hov { background: var(--hover); }
+  .lart { aspect-ratio: 4/3; border-radius: 12px; }
+  .lart.pl { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .lart.pl span { border-radius: 8px; background: var(--well); color: rgba(229,220,197,.55); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .lart.pl span:empty { color: transparent; }
+  .lart.pl svg.i { width: 18px; height: 18px; }
+  .lart.so { background: var(--well); color: var(--sand); display: flex; align-items: center; justify-content: center; }
+  .lart.gr { position: relative; }
+  .lart.gr .tab { position: absolute; left: 0; top: 0; width: 40%; height: 20%; border-radius: 10px 10px 0 0; background: var(--raised); }
+  .lart.gr .back { position: absolute; inset: 16% 0 0 0; border-radius: 4px 12px 12px 12px; background: var(--raised); }
+  .lart.gr .front { position: absolute; left: 0; right: 0; bottom: 0; height: 52%; border-radius: 12px; background: linear-gradient(180deg,#74746d,#5c5c55); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); display: flex; align-items: flex-end; justify-content: flex-end; padding: 8px 10px; }
+  .lart.gr .count { font-family: var(--font-mono); font-size: 11px; color: var(--text-soft); background: rgba(22,22,21,.35); border-radius: 999px; padding: 2px 8px; }
+  .lmeta .nm { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lmeta .sb { margin-top: 3px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted-2); white-space: nowrap; overflow: hidden; }
+  .lmeta .sb b { font-size: 10.5px; letter-spacing: .04em; color: var(--white); }
+  .lmeta .sb svg.i { width: 14px; height: 14px; color: var(--sand); }
+
+  /* --- Add songs dialog --- */
+  .dialog.wide { max-width: 940px; }
+  .add-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; font-size: 13px; color: var(--muted-2); }
+  .btn-surface { background: var(--well); }
+  .arows { margin-top: 18px; }
+  .arows .h, .arow { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.2fr) 44px; column-gap: 12px; align-items: center; }
+  .arows .h { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; color: var(--muted-2); padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .arow { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.08); align-items: start; }
+  .arow .fn { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 13px; }
+  .input { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.14); font-size: 15px; min-width: 0; }
+  .input.focus { box-shadow: inset 0 0 0 1.5px var(--sand), 0 0 0 3px rgba(229,220,197,.2); }
+  .input .ph { color: var(--muted-3); }
+  .input .caret { width: 1.5px; height: 18px; background: var(--white); margin-left: -8px; }
+  .input .tagp { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px; background: var(--sand); color: var(--ink); font-size: 13px; font-weight: 600; }
+  .input .end { margin-left: auto; color: var(--muted-3); }
+  .input .end svg.i { width: 16px; height: 16px; }
+  .fhint { margin-top: 5px; font-size: 12px; color: var(--muted-2); }
+  .fhint u { text-underline-offset: 3px; cursor: pointer; }
+  .x-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--well); color: var(--white); display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .x-btn svg.i { width: 16px; height: 16px; }
+  .lb { position: absolute; z-index: 6; padding: 6px; border-radius: 16px; background: var(--well); box-shadow: var(--shadow-menu); max-height: 248px; overflow: hidden; }
+  .opt { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 10px; border-radius: 10px; font-size: 14.5px; }
+  .opt.act { background: var(--hover); }
+  .opt .av { width: 28px; height: 28px; border-radius: 50%; background: var(--charcoal); color: var(--sand); display: flex; align-items: center; justify-content: center; font: 800 12px var(--font-display); font-stretch: 125%; flex: none; }
+  .opt small { margin-left: auto; font-size: 12px; color: var(--muted-3); }
+  .opt.use { color: var(--sand); }
+  .opt.use svg.i { width: 18px; height: 18px; }
+  .lb-fade { position: absolute; left: 6px; right: 6px; bottom: 6px; height: 34px; border-radius: 0 0 12px 12px; background: linear-gradient(transparent, var(--well)); }
+  .bottom { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 18px; margin-top: 18px; align-items: start; }
+  .flabel { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .check { width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 2px rgba(255,255,255,.5); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .check.on { background: var(--sand); box-shadow: none; color: var(--ink); }
+  .check svg.i { width: 15px; height: 15px; stroke-width: 3; }
+  .mi .check { margin-left: auto; }
+  .mi .check svg.i { color: var(--ink); width: 15px; height: 15px; }
+  .opt small { white-space: nowrap; }
+  .srow.compact { grid-template-columns: 28px minmax(0,1fr) 130px 50px 44px; }
+  .stack { display: grid; gap: 28px; }
+  .inline-new { display: flex; gap: 8px; align-items: center; padding: 6px; }
+  .inline-new .input { flex: 1; min-height: 40px; }
+  .inline-new .btn { min-height: 40px; padding: 0 14px; font-size: 13.5px; }
+  .gopt { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 0 12px; border-radius: 14px; }
+  .gopt .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--well); color: var(--sand); display: flex; align-items: center; justify-content: center; }
+  .gopt .ic svg.i { width: 20px; height: 20px; }
+  .gopt .tx { flex: 1; min-width: 0; }
+  .gopt .tx b { display: block; font-size: 15px; font-weight: 600; }
+  .gopt .tx small { font-size: 12px; color: var(--muted-2); }
+  .gopt.new { color: var(--sand); }
+  .gopt.new .ic { background: transparent; box-shadow: inset 0 0 0 1.5px rgba(229,220,197,.5); }
+  .gnew { padding: 10px 12px; border-radius: 14px; background: var(--well); }
+  .gnew .row { display: flex; gap: 8px; margin-top: 8px; }
+  .gnew .row .input { flex: 1; background: var(--charcoal); }
+  .gnew .row .btn { min-height: 44px; padding: 0 14px; font-size: 14px; }
+
+  @media (max-width: 760px) {
+    .win-main { padding: 22px 16px; }
+    .pbar { grid-template-columns: minmax(0,1fr) auto; padding: 12px 16px; }
+    .pbar-ctl .seek, .pbar-side .from-wide { display: none; }
+    .pbar-side { display: none; }
+    .from { display: none; }
+    .stats { grid-template-columns: 1fr; }
+    .bottom { grid-template-columns: 1fr; }
+    .arows .h, .arow { grid-template-columns: minmax(0,1fr) 44px; }
+    .arow .fn, .arows .h span:nth-child(1), .arows .h span:nth-child(2), .arow > div:nth-child(2) { display: none; }
+    .th-row, .srow { grid-template-columns: minmax(0,1fr) 44px; }
+    .th-row span:not(:nth-child(2)):not(:last-child), .srow > :not(.t):not(:last-child) { display: none; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /><path d="M10 21v-6h4v6" /></symbol><symbol id="i-library" viewBox="0 0 24 24"><rect x="3" y="4" width="4" height="16" rx="1" /><rect x="8.5" y="7" width="4" height="13" rx="1" /><path d="m14.6 6.4 3.8-1 3.7 13.6-3.8 1z" /></symbol><symbol id="i-playlist" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></symbol><symbol id="i-playlistAdd" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M17.5 14v7" /><path d="M14 17.5h7" /></symbol><symbol id="i-songs" viewBox="0 0 24 24"><path d="M21 15V6" /><circle cx="18.5" cy="15.5" r="2.5" /><path d="M12 12H3" /><path d="M16 6H3" /><path d="M12 18H3" /></symbol><symbol id="i-artist" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><path d="M12 18v4" /></symbol><symbol id="i-profile" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></symbol><symbol id="i-group" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" /></symbol><symbol id="i-folderOpen" viewBox="0 0 24 24"><path d="M3 18.5V6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h7A1.5 1.5 0 0 1 19.5 9v1.5" /><path d="M3 18.5 5.6 11.6A1.5 1.5 0 0 1 7 10.5h13.4a1 1 0 0 1 .95 1.3L19.3 19a1.5 1.5 0 0 1-1.4 1H4.5A1.5 1.5 0 0 1 3 18.5z" /></symbol><symbol id="i-folderPlus" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" /><path d="M12 11v6" /><path d="M9 14h6" /></symbol><symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></symbol><symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></symbol><symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" /></symbol><symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol><symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" /></symbol><symbol id="i-chevronRight" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol><symbol id="i-chevronLeft" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol><symbol id="i-chevronDown" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol><symbol id="i-chevronUp" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6" /></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></symbol><symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4" /></symbol><symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 8h.01" /><path d="M11 12h1v4h1" /></symbol><symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5" /><path d="M12 16h.01" /></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></symbol><symbol id="i-cloudCheck" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /><path d="m9 14 2 2 4-4" /></symbol><symbol id="i-cloudUp" viewBox="0 0 24 24"><path d="M12 13v8" /><path d="m8 17 4-4 4 4" /><path d="M20.4 15.6A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.3" /></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></symbol><symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="11" rx="1.5" /><path d="M2 19h20" /></symbol><symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2" /><path d="M11 18h2" /></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a14 14 0 0 1 0 18" /><path d="M12 3a14 14 0 0 0 0 18" /></symbol><symbol id="i-windows" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></symbol><symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 6L2 7" /></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></symbol><symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></symbol><symbol id="i-retry" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 21v-5h5" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /></symbol><symbol id="i-grip" viewBox="0 0 24 24"><circle class="f" cx="9" cy="6" r="1.5" /><circle class="f" cx="15" cy="6" r="1.5" /><circle class="f" cx="9" cy="12" r="1.5" /><circle class="f" cx="15" cy="12" r="1.5" /><circle class="f" cx="9" cy="18" r="1.5" /><circle class="f" cx="15" cy="18" r="1.5" /></symbol><symbol id="i-more" viewBox="0 0 24 24"><circle class="f" cx="5" cy="12" r="1.7" /><circle class="f" cx="12" cy="12" r="1.7" /><circle class="f" cx="19" cy="12" r="1.7" /></symbol><symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3h5v5" /><path d="M4 20 21 3" /><path d="M21 16v5h-5" /><path d="m15 15 6 6" /><path d="M4 4l5 5" /></symbol><symbol id="i-prev" viewBox="0 0 24 24"><path class="f" d="M19 20 9 12l10-8v16z" /><path d="M5 19V5" stroke-width="2.4" /></symbol><symbol id="i-next" viewBox="0 0 24 24"><path class="f" d="m5 4 10 8-10 8V4z" /><path d="M19 5v14" stroke-width="2.4" /></symbol><symbol id="i-play" viewBox="0 0 24 24"><path class="f" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></symbol><symbol id="i-pause" viewBox="0 0 24 24"><rect class="f" x="6" y="4" width="4" height="16" rx="1" /><rect class="f" x="14" y="4" width="4" height="16" rx="1" /></symbol><symbol id="i-repeatOne" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /><path d="M11 10h1v4" /></symbol><symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></symbol><symbol id="i-collapse" viewBox="0 0 24 24"><path d="M14 4v6h6" /><path d="M10 20v-6H4" /><path d="M14 10l7-7" /><path d="M3 21l7-7" /></symbol><symbol id="i-equalizer" viewBox="0 0 24 24"><path d="M6 18V10" /><path d="M10 18V5" /><path d="M14 18v-9" /><path d="M18 18v-5" /></symbol><symbol id="i-wifiOff" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5 12.5a10 10 0 0 1 14 0" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M2 2l20 20" /></symbol><symbol id="i-arrowTop" viewBox="0 0 24 24"><path d="M5 4h14" /><path d="m7 14 5-5 5 5" /><path d="M12 9v11" /></symbol><symbol id="i-arrowBottom" viewBox="0 0 24 24"><path d="M5 20h14" /><path d="m7 10 5 5 5-5" /><path d="M12 15V4" /></symbol></svg>
+<main class="doc">
+  <div class="items">Song Sleeve · design review · round 2</div>
+  <h1>Round 2 proposal</h1>
+  <p class="lead">The screens that change in <code>docs/fixes-checklist-round2.md</code>, drawn with the app's colours, type and icons. Hover states and open menus are shown frozen so each one can be reviewed. Item numbers match the checklist.</p>
+  <ul class="toc">
+    <li><a href="#sync">14 · Sync control</a></li>
+    <li><a href="#headers">12 · Page headers</a></li>
+    <li><a href="#collections">13 · 6 · 10 · Playlist &amp; group</a></li>
+    <li><a href="#player">1–4 · Player bar</a></li>
+    <li><a href="#context">5 · Right-click</a></li>
+    <li><a href="#add">7–9 · Add songs</a></li>
+    <li><a href="#groups">11 · Add to groups</a></li>
+  </ul>
+
+  <!-- ============================== 14. SYNC CONTROL ============================== -->
+  <section class="s" id="sync">
+    <div class="items">Item 14 · decisions A and B</div>
+    <h2>Sync control: switch + details</h2>
+    <div class="why">
+      One pill replaces the "Sync to cloud" chip and the Songs status card. <b>The switch</b> turns automatic sync on or off for the page's scope right away (no confirmation, decision B). <b>The details button</b> opens the dialog. The same control appears on the web (decision A).
+      <ul>
+        <li>Songs, Artists, Library → the whole library. Playlist → that playlist. Group → that group.</li>
+        <li>The orange badge on details counts songs still uploading or waiting.</li>
+      </ul>
+    </div>
+
+    <div class="panel">
+      <div class="states">
+        <div class="state">
+          <div class="cap">Off</div>
+          <div class="sync"><span class="lbl"><i data-i="cloudUp"></i>Auto sync</span><button class="switch" role="switch" aria-checked="false"><span></span></button><button class="det" aria-label="Sync details"><i data-i="info"></i></button></div>
+          <p>Songs added here stay only on this computer.</p>
+        </div>
+        <div class="state">
+          <div class="cap">Turning on</div>
+          <div class="sync"><span class="lbl"><i data-i="cloudUp"></i>Auto sync</span><button class="switch busy" role="switch" aria-checked="true"><span></span></button><button class="det"><i data-i="info"></i></button></div>
+          <p>While the request runs, the knob pulses and the switch ignores clicks.</p>
+        </div>
+        <div class="state">
+          <div class="cap">On · uploading</div>
+          <div class="sync"><span class="lbl"><i data-i="cloudCheck"></i>Auto sync</span><button class="switch" role="switch" aria-checked="true"><span></span></button><button class="det"><i data-i="info"></i><span class="badge">12</span></button></div>
+          <p>12 songs uploading or waiting. The badge goes away when they're done.</p>
+        </div>
+        <div class="state">
+          <div class="cap">On · all synced</div>
+          <div class="sync"><span class="lbl"><i data-i="cloudCheck"></i>Auto sync</span><button class="switch" role="switch" aria-checked="true"><span></span></button><button class="det"><i data-i="info"></i></button></div>
+          <p>Anything added here from now on uploads by itself.</p>
+        </div>
+        <div class="state">
+          <div class="cap">Account without cloud sync</div>
+          <div class="sync off-acct" style="position:relative"><span class="lbl"><i data-i="lock"></i>Auto sync</span><button class="switch" role="switch" aria-checked="false" disabled><span></span></button><button class="det"><i data-i="info"></i></button></div>
+          <p>Disabled. Tooltip: "Cloud sync isn't available on this account". Details still opens.</p>
+        </div>
+        <div class="state">
+          <div class="cap">Toast after turning on</div>
+          <div class="toast"><i data-i="cloudUp"></i>12 songs queued to sync · 340 MB<a href="#">Details</a></div>
+          <p>Turning off shows "Automatic sync paused". Songs already uploaded stay in the cloud.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row2" style="margin-top:24px">
+      <div>
+        <div class="cap">Details dialog · off</div>
+        <div class="scrim">
+          <div class="dialog">
+            <button class="x" aria-label="Close"><i data-i="close"></i></button>
+            <h3>Tavern Tracks · cloud sync</h3>
+            <div class="switch-row">
+              <div class="t"><strong>Automatic sync</strong><span class="s">Upload this playlist's songs now, and any song added to it later.</span></div>
+              <button class="switch" role="switch" aria-checked="false"><span></span></button>
+            </div>
+            <dl class="stats">
+              <div><dt>Already synced</dt><dd>1</dd></div>
+              <div><dt>To upload · 18 MB</dt><dd>2</dd></div>
+              <div><dt>Need attention</dt><dd>0</dd></div>
+            </dl>
+            <p class="note"><i data-i="info"></i><span>Songs upload a few at a time. A song that fails is left out and shown in Songs, where you can try again.</span></p>
+            <div class="acts"><button class="btn btn-primary">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="cap">Details dialog · on, uploading</div>
+        <div class="scrim">
+          <div class="dialog">
+            <button class="x" aria-label="Close"><i data-i="close"></i></button>
+            <h3>Tavern Tracks · cloud sync</h3>
+            <div class="switch-row">
+              <div class="t"><strong>Automatic sync is on</strong><span class="s">Songs added to this playlist upload by themselves.</span></div>
+              <button class="switch" role="switch" aria-checked="true"><span></span></button>
+            </div>
+            <dl class="stats">
+              <div><dt>Already synced</dt><dd>1</dd></div>
+              <div><dt>In queue</dt><dd>2</dd></div>
+              <div><dt>Need attention</dt><dd>0</dd></div>
+            </dl>
+            <div class="prog" aria-label="Uploading"><i></i></div>
+            <p class="note"><i data-i="info"></i><span>Turning it off stops new uploads. Songs already in the cloud stay there.</span></p>
+            <div class="acts"><button class="btn btn-primary">Close</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="why" style="margin-top:14px"><b>On the web</b> the dialog's text reads "Your installed apps will upload songs they add here", and "To upload" counts the songs that are on a computer but not in the cloud yet.</p>
+  </section>
+
+  <!-- ============================== 12. HEADERS ============================== -->
+  <section class="s" id="headers">
+    <div class="items">Item 12</div>
+    <h2>One header for Songs, Artists and Library</h2>
+    <div class="why">Title, then a subtitle with counts. The sync control and <b>Add songs</b> sit at the end. Other controls move to a toolbar row below. On narrow windows the actions wrap under the title.</div>
+
+    <div class="cap">Songs</div>
+    <div class="win"><div class="win-main">
+      <header class="page-head">
+        <div><h1 class="page-title">Songs</h1><p class="page-sub">3 songs · 2 only on this computer</p></div>
+        <div class="acts">
+          <div class="sync"><span class="lbl"><i data-i="cloudUp"></i>Auto sync</span><button class="switch" role="switch" aria-checked="false"><span></span></button><button class="det"><i data-i="info"></i></button></div>
+          <button class="btn btn-primary"><i data-i="plus"></i>Add songs</button>
+        </div>
+      </header>
+      <div class="toolbar"><div class="search"><i data-i="search"></i>Search songs</div></div>
+    </div></div>
+
+    <div class="cap" style="margin-top:26px">Library</div>
+    <div class="win"><div class="win-main">
+      <header class="page-head">
+        <div><h1 class="page-title">Library</h1><p class="page-sub">3 songs · 2 playlists · 1 group</p></div>
+        <div class="acts">
+          <div class="sync"><span class="lbl"><i data-i="cloudUp"></i>Auto sync</span><button class="switch" role="switch" aria-checked="false"><span></span></button><button class="det"><i data-i="info"></i></button></div>
+          <button class="btn btn-primary"><i data-i="plus"></i>Add songs</button>
+        </div>
+      </header>
+      <div class="toolbar">
+        <div class="search"><i data-i="search"></i>Search songs, playlists and groups</div>
+        <span class="chip" title="Filter saved to your account · same view on every device"><i data-i="check"></i>Songs <small>3</small></span>
+        <span class="chip"><i data-i="check"></i>Playlists <small>2</small></span>
+        <span class="chip"><i data-i="check"></i>Groups <small>1</small></span>
+        <span class="grow"></span>
+        <button class="btn btn-secondary btn-sm"><i data-i="plus"></i>Create playlist</button>
+        <button class="btn btn-secondary btn-sm"><i data-i="plus"></i>Create group</button>
+      </div>
+      <div class="lgrid">
+        <div class="lcard"><div class="lart gr"><span class="tab"></span><span class="back"></span><span class="front"><span class="count">1 playlist</span></span></div><div class="lmeta"><div class="nm">Fantasy Playlists</div><div class="sb"><i data-i="group"></i><b>GROUP</b>· 1 playlist</div></div></div>
+        <div class="lcard"><div class="lart pl"><span><i data-i="note"></i></span><span><i data-i="note"></i></span><span><i data-i="note"></i></span><span></span></div><div class="lmeta"><div class="nm">Tavern Tracks</div><div class="sb"><i data-i="playlist"></i><b>PLAYLIST</b>· 3 songs</div></div></div>
+        <div class="lcard"><div class="lart pl"><span><i data-i="note"></i></span><span></span><span></span><span></span></div><div class="lmeta"><div class="nm">teste</div><div class="sb"><i data-i="playlist"></i><b>PLAYLIST</b>· 1 song</div></div></div>
+        <div class="lcard"><div class="lart so"><i data-i="note"></i></div><div class="lmeta"><div class="nm">Enchanters</div><div class="sb"><i data-i="note"></i><b>SONG</b>· Raney Shockne</div></div></div>
+      </div>
+    </div></div>
+    <p class="why" style="margin-top:10px">The chips' tooltip says "Filter saved to your account · same view on every device", in place of the old subtitle.</p>
+
+    <div class="cap" style="margin-top:26px">Artists</div>
+    <div class="win"><div class="win-main">
+      <header class="page-head">
+        <div><h1 class="page-title">Artists</h1><p class="page-sub">2 artists</p></div>
+        <div class="acts">
+          <div class="sync"><span class="lbl"><i data-i="cloudCheck"></i>Auto sync</span><button class="switch" role="switch" aria-checked="true"><span></span></button><button class="det"><i data-i="info"></i></button></div>
+          <button class="btn btn-primary"><i data-i="plus"></i>Add songs</button>
+        </div>
+      </header>
+      <p class="why" style="margin:16px 0 0">The artist list and the artist card below stay as they are today. With an artist selected, Add songs fills in that artist for files without an artist tag. The switch syncs the whole library, because the server has no per-artist scope.</p>
+    </div></div>
+  </section>
+
+  <!-- ============================== 13 / 6 / 10. COLLECTIONS ============================== -->
+  <section class="s" id="collections">
+    <div class="items">Items 13 · 6 · 10</div>
+    <h2>Playlist and group pages share one layout</h2>
+    <div class="why">
+      Big art, with the kicker, name and meta beside it. <b>Sync and ⋯ sit at the end of the header</b>, and playback controls are on the row below. A ← back button and a breadcrumb that knows where you came from replace the fixed "Library / Playlists".
+    </div>
+
+    <div class="cap">Playlist, opened from a group</div>
+    <div class="win"><div class="win-main">
+      <nav class="crumbs"><button class="back" aria-label="Back"><i data-i="chevronLeft"></i></button><a href="#">Library</a><span class="sep">/</span><a href="#">Fantasy Playlists</a><span class="sep">/</span><span>Tavern Tracks</span></nav>
+      <header class="coll-head">
+        <div class="hero-pl"><span><i data-i="note"></i></span><span><i data-i="note"></i></span><span><i data-i="note"></i></span><span></span></div>
+        <div class="info">
+          <div class="kicker">Playlist</div>
+          <h1>Tavern Tracks</h1>
+          <div class="meta"><span>3 songs · 7 min</span><span>·</span><span>In</span><a class="pill-link" href="#">Fantasy Playlists</a></div>
+        </div>
+        <div class="end">
+          <div class="sync"><span class="lbl"><i data-i="cloudUp"></i>Auto sync</span><button class="switch" role="switch" aria-checked="false"><span></span></button><button class="det"><i data-i="info"></i></button></div>
+          <button class="round-btn" aria-label="Playlist options"><i data-i="more"></i></button>
+        </div>
+      </header>
+      <div class="ctrls" style="position:relative">
+        <button class="btn btn-primary"><i data-i="play"></i>Play</button>
+        <button class="round-btn on" aria-label="Shuffle"><i data-i="shuffle"></i></button>
+        <button class="btn btn-secondary btn-sm" style="background:var(--hover)"><i data-i="plus"></i>Add songs<i data-i="chevronDown"></i></button>
+        <span class="hint">Drag to reorder, or focus a handle and use ↑ ↓</span>
+        <div class="menu" style="left:166px; top:56px; width:300px">
+          <div class="mi hov"><i data-i="file"></i><span>Add files from this computer…<span class="sub">"Tavern Tracks" is already checked</span></span></div>
+          <div class="mi"><i data-i="playlistAdd"></i><span>Choose from your songs…<span class="sub">Songs already in your library</span></span></div>
+        </div>
+      </div>
+      <div style="margin-top:22px">
+        <div class="th-row"><span></span><span>TITLE</span><span>ARTIST</span><span>STATUS</span><span style="text-align:right">TIME</span><span></span></div>
+        <div class="srow"><span class="grip"><i data-i="grip"></i></span><span class="t"><span class="th"><i data-i="note"></i></span>Oh, Grey Warden</span><span class="a">Raney Shockne</span><span class="badge-st"><i data-i="cloudCheck"></i>Synced</span><span class="mono">2:12</span><button class="icon-btn"><i data-i="more"></i></button></div>
+        <div class="srow"><span class="grip"><i data-i="grip"></i></span><span class="t"><span class="th"><i data-i="note"></i></span>Sera Was Never</span><span class="a">Raney Shockne</span><span class="badge-st dev"><i data-i="laptop"></i>On this device</span><span class="mono">1:45</span><button class="icon-btn"><i data-i="more"></i></button></div>
+      </div>
+    </div></div>
+    <p class="why" style="margin-top:10px">Opened from the Library or the sidebar, the breadcrumb reads "Library / Playlists / Tavern Tracks", and "Playlists" opens the Library filtered to playlists. ← goes back in history, or to the Library if there's none.</p>
+
+    <div class="cap" style="margin-top:26px">Group (same structure; only the back button and breadcrumb are new)</div>
+    <div class="win"><div class="win-main">
+      <nav class="crumbs"><button class="back" aria-label="Back"><i data-i="chevronLeft"></i></button><a href="#">Library</a><span class="sep">/</span><a href="#">Groups</a><span class="sep">/</span><span>Fantasy Playlists</span></nav>
+      <header class="coll-head">
+        <div class="hero-gr"><span class="tab"></span><span class="back"></span><span class="front"><span class="count">1 playlist</span></span></div>
+        <div class="info">
+          <div class="kicker">Group</div>
+          <h1>Fantasy Playlists</h1>
+          <div class="meta"><span>1 playlist · 3 songs</span></div>
+        </div>
+        <div class="end">
+          <div class="sync"><span class="lbl"><i data-i="cloudCheck"></i>Auto sync</span><button class="switch" role="switch" aria-checked="true"><span></span></button><button class="det"><i data-i="info"></i><span class="badge">2</span></button></div>
+          <button class="round-btn" aria-label="Group options"><i data-i="more"></i></button>
+        </div>
+      </header>
+      <div class="ctrls">
+        <button class="btn btn-primary"><i data-i="play"></i>Play</button>
+        <button class="round-btn" aria-label="Shuffle"><i data-i="shuffle"></i></button>
+        <button class="btn btn-secondary btn-sm"><i data-i="plus"></i>Add playlists</button>
+      </div>
+    </div></div>
+    <p class="why" style="margin-top:10px">"Add playlists" moves up from the list heading to the controls row, so both pages put their add button in the same place.</p>
+  </section>
+
+  <!-- ============================== 1–4. PLAYER BAR ============================== -->
+  <section class="s" id="player">
+    <div class="items">Items 1 · 2 · 3 · 4</div>
+    <h2>Player bar</h2>
+    <div class="why">
+      <ul style="margin:0">
+        <li><b>The origin pill</b> moves next to the title and artist (3).</li>
+        <li><b>The artist</b> is its own link to the artist page; the cover and title still open the full player (2).</li>
+        <li><b>A ⋯ button</b> before expand opens the current song's menu (4).</li>
+        <li><b>The play triangle</b> loses its extra margin and sits centred (1).</li>
+      </ul>
+    </div>
+
+    <div class="cap">Before</div>
+    <div class="win" style="border-radius:16px">
+      <div class="pbar ghost" style="border-radius:16px">
+        <div class="pbar-now"><span class="pbar-sleeve"><i data-i="note"></i></span><span class="pbar-txt"><span class="n">Sera Was Never</span><span class="ar">Raney Shockne</span></span></div>
+        <div class="pbar-ctl"><div class="pbar-btns"><button class="icon-btn"><i data-i="shuffle"></i></button><button class="icon-btn"><i data-i="prev"></i></button><button class="pp"><i data-i="play" style="margin-left:3px"></i></button><button class="icon-btn"><i data-i="next"></i></button><button class="icon-btn"><i data-i="repeatOne"></i></button></div><div class="seek"><span>1:07</span><span class="tr"><i></i><b></b></span><span>1:45</span></div></div>
+        <div class="pbar-side"><a class="from"><i data-i="playlist"></i><span>Tavern Tracks</span></a><button class="round-btn"><i data-i="expand"></i></button></div>
+      </div>
+    </div>
+
+    <div class="cap" style="margin-top:22px">After · hovering the artist, ⋯ menu open</div>
+    <div class="win" style="overflow:visible; border-radius:16px; margin-top:330px">
+      <div class="pbar" style="border-radius:16px">
+        <div class="pbar-now">
+          <span class="pbar-sleeve"><i data-i="note"></i></span>
+          <span class="pbar-txt"><span class="n">Sera Was Never</span><a class="ar hov" href="#">Raney Shockne</a></span>
+          <a class="from" href="#"><i data-i="playlist"></i><span>Tavern Tracks</span></a>
+        </div>
+        <div class="pbar-ctl"><div class="pbar-btns"><button class="icon-btn"><i data-i="shuffle"></i></button><button class="icon-btn"><i data-i="prev"></i></button><button class="pp"><i data-i="play"></i></button><button class="icon-btn"><i data-i="next"></i></button><button class="icon-btn"><i data-i="repeatOne"></i></button></div><div class="seek"><span>1:07</span><span class="tr"><i></i><b></b></span><span>1:45</span></div></div>
+        <div class="pbar-side" style="position:relative">
+          <button class="round-btn sm" style="background:var(--well)" aria-label="More actions"><i data-i="more"></i></button>
+          <button class="round-btn" aria-label="Open full player"><i data-i="expand"></i></button>
+          <div class="menu" style="right:0; bottom:62px">
+            <div class="mhead">Sera Was Never</div>
+            <div class="mi"><i data-i="playlistAdd"></i>Add to playlist<i data-i="chevronRight" class="chev"></i></div>
+            <div class="mi hov"><i data-i="artist"></i>Go to artist</div>
+            <div class="mi"><i data-i="pencil"></i>Edit details</div>
+            <div class="mi"><i data-i="cloudUp"></i>Sync to cloud</div>
+            <div class="mi"><i data-i="folderOpen"></i>Show in folder</div>
+            <div class="mdiv"></div>
+            <div class="mi danger"><i data-i="trash"></i>Delete song</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="why" style="margin-top:10px">The menu has the same items as the song row's menu for that song (shown here for a local song on desktop). On narrow windows the pill, ⋯ and expand hide, as the right side does today. Tapping the cover still opens the full player.</p>
+
+    <div class="cap" style="margin-top:22px">Play icon centring</div>
+    <div class="panel"><div class="centre-demo">
+      <figure><button class="pp"><i data-i="play" style="margin-left:4px"></i></button>Today: path + 4 px margin</figure>
+      <figure><button class="pp"><i data-i="play"></i></button>Proposed: path only</figure>
+    </div></div>
+  </section>
+
+  <!-- ============================== 5. RIGHT-CLICK ============================== -->
+  <section class="s" id="context">
+    <div class="items">Item 5</div>
+    <h2>Right-click opens the item's own menu</h2>
+    <div class="why">The same menus as the ⋯ buttons, opened at the pointer. On desktop the WebKit menu (Back, Reload, Inspect…) no longer appears anywhere except in text fields, where copy and paste still work.</div>
+    <div class="row2">
+      <div>
+        <div class="cap">On a song row</div>
+        <div class="win" style="height:420px"><div class="win-main">
+          <div class="srow compact hl"><span class="grip"><i data-i="grip"></i></span><span class="t"><span class="th"><i data-i="note"></i></span>Sera Was Never</span><span class="badge-st dev"><i data-i="laptop"></i>On this device</span><span class="mono">1:45</span><button class="icon-btn"><i data-i="more"></i></button></div>
+          <div class="srow compact"><span class="grip"><i data-i="grip"></i></span><span class="t"><span class="th"><i data-i="note"></i></span>Enchanters</span><span class="badge-st dev"><i data-i="laptop"></i>On this device</span><span class="mono">3:20</span><button class="icon-btn"><i data-i="more"></i></button></div>
+          <svg class="cursor" style="left:190px; top:56px" viewBox="0 0 18 22"><path d="M1 1v17l4.5-4 3 7 3-1.3-3-6.7H15z" fill="#fff" stroke="#161615" stroke-width="1.2"/></svg>
+          <div class="menu" style="left:196px; top:64px">
+            <div class="mi hov"><i data-i="play"></i>Play</div>
+            <div class="mi"><i data-i="playlistAdd"></i>Add to playlist<i data-i="chevronRight" class="chev"></i></div>
+            <div class="mi"><i data-i="pencil"></i>Edit details</div>
+            <div class="mi"><i data-i="cloudUp"></i>Sync to cloud</div>
+            <div class="mdiv"></div>
+            <div class="mi danger"><i data-i="trash"></i>Delete song</div>
+          </div>
+        </div></div>
+      </div>
+      <div>
+        <div class="cap">On a playlist card (Library, Home, sidebar)</div>
+        <div class="win" style="height:420px"><div class="win-main">
+          <div class="lgrid" style="margin:0; grid-template-columns: repeat(2, minmax(0, 190px))">
+            <div class="lcard hov" style="box-shadow:var(--shadow-card), inset 0 0 0 1.5px var(--sand)"><div class="lart pl"><span><i data-i="note"></i></span><span><i data-i="note"></i></span><span><i data-i="note"></i></span><span></span></div><div class="lmeta"><div class="nm">Tavern Tracks</div><div class="sb"><i data-i="playlist"></i><b>PLAYLIST</b>· 3 songs</div></div></div>
+            <div class="lcard"><div class="lart gr"><span class="tab"></span><span class="back"></span><span class="front"><span class="count">1 playlist</span></span></div><div class="lmeta"><div class="nm">Fantasy Playlists</div><div class="sb"><i data-i="group"></i><b>GROUP</b>· 1 playlist</div></div></div>
+          </div>
+          <svg class="cursor" style="left:150px; top:120px" viewBox="0 0 18 22"><path d="M1 1v17l4.5-4 3 7 3-1.3-3-6.7H15z" fill="#fff" stroke="#161615" stroke-width="1.2"/></svg>
+          <div class="menu" style="left:156px; top:128px">
+            <div class="mi hov"><i data-i="play"></i>Play</div>
+            <div class="mi"><i data-i="pencil"></i>Rename playlist</div>
+            <div class="mi"><i data-i="folderPlus"></i>Add to groups</div>
+            <div class="mdiv"></div>
+            <div class="mi danger"><i data-i="trash"></i><span>Delete playlist<span class="sub">Songs stay in your library</span></span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <p class="why" style="margin-top:10px">A group card gets Play, Rename group and Delete group. Right-clicking a playlist on a group page keeps its in-group menu: Rename, Remove from group, Delete. "Play" is new in these menus, so a card can start playing without opening it.</p>
+  </section>
+
+  <!-- ============================== 7–9. ADD SONGS ============================== -->
+  <section class="s" id="add">
+    <div class="items">Items 7 · 8 · 9</div>
+    <h2>Add songs dialog</h2>
+    <div class="why">
+      <ul style="margin:0">
+        <li><b>The artist list</b> floats over the dialog instead of inside the scrolling rows. It opens upward when there's no room below, and adds no height (8).</li>
+        <li><b>Clicking an empty artist field</b> lists every artist, A–Z. Typing filters the list (7).</li>
+        <li><b>Playlists</b> become a checkbox list, so songs can go into several at once. "New playlist…" creates one and checks it (9).</li>
+      </ul>
+    </div>
+
+    <div class="stack">
+      <div>
+        <div class="cap">Artist field focused, nothing typed</div>
+        <div class="scrim" style="padding:30px 16px 60px">
+          <div class="dialog" style="max-width:none">
+            <h3>Add songs</h3>
+            <div class="arows">
+              <div class="h"><span>FILE</span><span>NAME</span><span>ARTIST (OPTIONAL)</span><span></span></div>
+              <div class="arow"><span class="fn">dragon-age-inquisition-tavern-s…</span><div class="input">Sera Was Never</div><div><div class="input"><span class="tagp">Raney Shockne</span><span class="end"><i data-i="chevronDown"></i></span></div><div class="fhint">In your library</div></div><button class="x-btn"><i data-i="close"></i></button></div>
+              <div class="arow" style="position:relative"><span class="fn">dragon-age-inquisition-tavern-s…</span><div class="input">Enchanters</div>
+                <div style="position:relative"><div class="input focus"><span class="caret"></span><span class="ph">Search artists</span></div>
+                  <div class="lb" style="left:0; right:0; top:50px">
+                    <div class="opt use act"><i data-i="plus"></i>Use "Nymeria"<small>from the file</small></div>
+                    <div class="opt"><span class="av">A</span>Aurora Fields<small>4 songs</small></div>
+                    <div class="opt"><span class="av">N</span>Nightingale<small>2 songs</small></div>
+                    <div class="opt"><span class="av">R</span>Raney Shockne<small>3 songs</small></div>
+                    <div class="opt"><span class="av">T</span>Trevor Morris<small>1 song</small></div>
+                    <span class="lb-fade"></span>
+                  </div>
+                </div>
+                <button class="x-btn"><i data-i="close"></i></button></div>
+            </div>
+            <div class="bottom" style="opacity:.45">
+              <div><div class="flabel">Add to playlists (optional)</div><div class="input">None<span class="end"><i data-i="chevronDown"></i></span></div></div>
+              <div style="display:flex; gap:12px; padding-top:30px"><span class="check"></span><span style="font-size:14px; font-weight:600">Sync to cloud now</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="why" style="margin-top:10px">The list draws over the "Add to playlists" row, not under it. The dialog's rows don't scroll or grow. The list scrolls on its own, up to about 6 rows.</p>
+      </div>
+
+      <div>
+        <div class="cap">Playlists picker open</div>
+        <div class="scrim" style="padding:30px 16px 60px">
+          <div class="dialog" style="max-width:none">
+            <h3>Add songs</h3>
+            <div class="arows" style="opacity:.45">
+              <div class="h"><span>FILE</span><span>NAME</span><span>ARTIST (OPTIONAL)</span><span></span></div>
+              <div class="arow"><span class="fn">dragon-age-inquisition-tavern-s…</span><div class="input">Sera Was Never</div><div class="input"><span class="tagp">Raney Shockne</span></div><button class="x-btn"><i data-i="close"></i></button></div>
+            </div>
+            <div class="bottom">
+              <div style="position:relative">
+                <div class="flabel">Add to playlists (optional)</div>
+                <div class="input focus">2 playlists<span class="end"><i data-i="chevronDown"></i></span></div>
+                <div class="menu" style="left:0; right:0; width:auto; top:84px">
+                  <div class="mi hov">Tavern Tracks<span class="check on"><i data-i="check"></i></span></div>
+                  <div class="mi">teste<span class="check"></span></div>
+                  <div class="mi">Road trip<span class="check on"><i data-i="check"></i></span></div>
+                  <div class="mdiv"></div>
+                  <div class="mi"><i data-i="plus"></i>New playlist…</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:12px; padding-top:30px"><span class="check"></span><span style="font-size:14px; font-weight:600">Sync to cloud now</span></div>
+            </div>
+            <div style="height:170px"></div>
+          </div>
+        </div>
+        <p class="why" style="margin-top:10px">Ticking a box keeps the list open. The field reads "None", the playlist's name, or "N playlists". "New playlist…" turns into a name field with Create and Cancel (as today), and Create checks the new playlist.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== 11. ADD TO GROUPS ============================== -->
+  <section class="s" id="groups">
+    <div class="items">Item 11</div>
+    <h2>Add to groups: create a group in place</h2>
+    <div class="why">A "New group…" row at the top of the list. It turns into a name field. Create adds the group and checks it, so <b>Add</b> saves it together with any other checked groups.</div>
+    <div class="row2">
+      <div>
+        <div class="cap">Closed</div>
+        <div class="scrim">
+          <div class="dialog">
+            <button class="x"><i data-i="close"></i></button>
+            <h3>Add to groups</h3>
+            <p style="margin:6px 0 0; font-size:14px; color:var(--muted)">teste can be in several groups. Nothing is copied.</p>
+            <div class="search" style="margin-top:16px; max-width:none; background:var(--well)"><i data-i="search"></i>Search</div>
+            <div style="margin-top:10px">
+              <div class="gopt new"><span class="ic"><i data-i="folderPlus"></i></span><span class="tx"><b>New group…</b></span></div>
+              <div class="gopt"><span class="ic"><i data-i="group"></i></span><span class="tx"><b>Fantasy Playlists</b><small>1 playlist</small></span><span class="check"></span></div>
+            </div>
+            <div class="acts"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary" disabled style="background:var(--disabled-bg); color:var(--disabled-fg); box-shadow:none">Add</button></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="cap">Naming a new group → then checked</div>
+        <div class="scrim">
+          <div class="dialog">
+            <button class="x"><i data-i="close"></i></button>
+            <h3>Add to groups</h3>
+            <p style="margin:6px 0 0; font-size:14px; color:var(--muted)">teste can be in several groups. Nothing is copied.</p>
+            <div class="search" style="margin-top:16px; max-width:none; background:var(--well)"><i data-i="search"></i>Search</div>
+            <div style="margin-top:10px">
+              <div class="gnew"><div style="font-size:13px; font-weight:600">New group</div><div class="row"><div class="input focus">Dragon Age<span class="caret" style="margin-left:2px"></span></div><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Create</button></div></div>
+              <div class="gopt"><span class="ic"><i data-i="group"></i></span><span class="tx"><b>Fantasy Playlists</b><small>1 playlist</small></span><span class="check on"><i data-i="check"></i></span></div>
+            </div>
+            <div class="acts"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Add</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+  // Expands <i data-i="name"> into the app's icon from the sprite above.
+  document.querySelectorAll('i[data-i]').forEach((el) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'i' + (el.className ? ' ' + el.className : ''));
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    if (el.getAttribute('style')) svg.setAttribute('style', el.getAttribute('style'));
+    const sym = document.getElementById('i-' + el.dataset.i);
+    if (sym) svg.innerHTML = sym.innerHTML;
+    el.replaceWith(svg);
+  });
+</script>
+</body>
+</html>
