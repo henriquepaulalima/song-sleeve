@@ -7,7 +7,9 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"embed"
+	"encoding/base64"
 	"io/fs"
 	"log"
 	"os"
@@ -24,13 +26,29 @@ import (
 
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/shell"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/tray"
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/update"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// version is set at build time (-ldflags "-X main.version=…").
-var version = "0.1.0"
+// Set at build time (-ldflags "-X main.version=…"; see the Makefile and the release
+// workflow). Without an update URL and key the build doesn't update itself.
+var (
+	version   = "0.1.0"
+	apiBase   = "http://localhost:8088/api"
+	updateURL = ""
+	updateKey = "" // base64 ed25519 public key of the release signing key
+)
+
+func updater(emit func(update.Status)) *update.Updater {
+	kind, path := update.Detect()
+	key, _ := base64.StdEncoding.DecodeString(updateKey)
+	return update.New(update.Config{
+		URL: env("SONG_SLEEVE_UPDATE_URL", updateURL), PublicKey: ed25519.PublicKey(key),
+		Current: version, Kind: kind, Path: path, Emit: emit,
+	})
+}
 
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -79,12 +97,19 @@ func openPath(p string) error {
 
 func main() {
 	var appCtx context.Context
-	// Set by Quit in the tray: the close that follows must not hide the window.
+	// Set by Quit in the tray and by an update restart: the close that follows
+	// must not hide the window.
 	var quitting atomic.Bool
 	setAppName()
+	upd := updater(func(st update.Status) {
+		if appCtx != nil {
+			wruntime.EventsEmit(appCtx, "update", st)
+		}
+	})
 	audio := []wruntime.FileFilter{{DisplayName: "Music (MP3, AAC, FLAC, WAV)", Pattern: "*.mp3;*.m4a;*.aac;*.mp4;*.flac;*.wav;*.MP3;*.M4A;*.AAC;*.FLAC;*.WAV"}}
 	sh, err := shell.New(shell.Config{
-		APIBase:    env("SONG_SLEEVE_API", "http://localhost:8088/api"),
+		APIBase:    env("SONG_SLEEVE_API", apiBase),
+		Updater:    upd,
 		Version:    version,
 		DataDir:    dataDir(),
 		SleeveRoot: sleeveRoot(),
@@ -115,6 +140,15 @@ func main() {
 			},
 			Open: openPath,
 			Tray: func(st shell.TrayState) { tray.Update(tray.State(st)) },
+			Restart: func() error {
+				_, path := update.Detect()
+				if err := update.Relaunch(path); err != nil {
+					return err
+				}
+				quitting.Store(true)
+				go wruntime.Quit(appCtx)
+				return nil
+			},
 		},
 	})
 	if err != nil {
@@ -135,6 +169,7 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			appCtx = ctx
 			sh.Restore(ctx)
+			go upd.Run(ctx)
 			tray.Start(tray.Handlers{
 				Show: func() {
 					wruntime.WindowShow(appCtx)

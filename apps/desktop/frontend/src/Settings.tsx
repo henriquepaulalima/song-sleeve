@@ -1,5 +1,5 @@
 /** Settings (installed apps, §8.3; designs/WebSettings). */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError } from '@song-sleeve/core';
 import { useSignal } from '@web/app/hooks';
 import { useI18n } from '@web/app/i18n';
@@ -9,6 +9,7 @@ import { ShortcutList } from '@web/components/ShortcutList';
 import { local } from './bridge';
 import { FORMATS, aptCommand, listFormats, missingFormats } from './codecs';
 import { connection, refreshShellState, shellState } from './services';
+import { checkForUpdate, openUrl, restartToUpdate, updateStatus } from './updates';
 
 interface CheckResult {
   caught_up: boolean;
@@ -49,6 +50,75 @@ function CodecCard() {
       <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--muted-2)' }}>{t('settings.codecsDebian')}</p>
       <p className="mono" style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)', wordBreak: 'break-all', userSelect: 'text' }}>
         {aptCommand(missing)}
+      </p>
+    </section>
+  );
+}
+
+/** Version and updates (§8.3, designs/WebSettings). */
+function AboutCard({ version, dataDir }: { version?: string; dataDir?: string }) {
+  const t = useI18n().t;
+  const toasts = useToasts();
+  const st = useSignal(updateStatus);
+  const run = (f: () => Promise<void>) => () => void f().catch((e) => toasts.error(e));
+  const busy = st?.state === 'checking' || st?.state === 'downloading';
+
+  let status: ReactNode = null;
+  if (st?.state === 'checking') status = t('settings.updateChecking');
+  else if (st?.state === 'current') status = t('settings.updateCurrent');
+  else if (st?.state === 'error') status = t('settings.updateError');
+  else if (st?.state === 'downloading' && st.version) status = t('settings.updateDownloading', { v: st.version, pct: Math.round((st.progress ?? 0) * 100) });
+  else if (st?.state === 'ready' && st.version)
+    status = (
+      <>
+        <span style={{ flex: 1 }}>{t('settings.updateReady', { v: st.version })}</span>
+        <button type="button" className="btn btn-primary btn-sm" onClick={run(restartToUpdate)}>
+          {t('settings.updateRestart')}
+        </button>
+      </>
+    );
+  else if (st?.state === 'available' && st.download) {
+    const deb = st.kind === 'deb';
+    status = (
+      <>
+        <span style={{ flex: 1 }}>{deb ? t('settings.updateAvailable') : st.error ? t('settings.updateManual', { v: st.version ?? '' }) : t('settings.updateAvailable')}</span>
+        {(deb || st.error) && (
+          <button type="button" className="link-btn" style={{ color: 'inherit', fontWeight: 700 }} onClick={run(() => openUrl(st.download!))}>
+            {deb ? t('settings.updateDeb') : t('settings.updatePage')}
+          </button>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <section className="card" aria-labelledby="h-about">
+      <p id="h-about" className="cap">
+        {t('settings.about')}
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>Song Sleeve</span>
+          <span className="mono" style={{ fontSize: 13, color: 'var(--muted-2)' }}>
+            {t('settings.version', { v: version ?? '—' })}
+          </span>
+        </span>
+        {st?.enabled ? (
+          <button type="button" className="btn btn-secondary btn-md" disabled={busy} onClick={run(checkForUpdate)}>
+            {t('settings.updateCheck')}
+          </button>
+        ) : (
+          <span style={{ fontSize: 13, color: 'var(--muted-2)' }}>{t('settings.updateDev')}</span>
+        )}
+      </div>
+      {status && (
+        <p role="status" style={{ margin: '14px 0 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, background: 'var(--sand)', color: 'var(--ink)', fontSize: 14 }}>
+          {status}
+        </p>
+      )}
+      <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--muted-2)' }}>{t('settings.dataDir')}</p>
+      <p className="mono" style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)', wordBreak: 'break-all' }}>
+        {dataDir ?? '—'}
       </p>
     </section>
   );
@@ -177,16 +247,7 @@ export default function Settings() {
             </p>
           </section>
           <ShortcutList />
-          <section className="card" aria-labelledby="h-about">
-            <p id="h-about" className="cap">
-              {t('settings.about')}
-            </p>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{t('settings.version', { v: st?.version ?? '—' })}</p>
-            <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--muted-2)' }}>{t('settings.dataDir')}</p>
-            <p className="mono" style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)', wordBreak: 'break-all' }}>
-              {st?.data_dir ?? '—'}
-            </p>
-          </section>
+          <AboutCard version={st?.version} dataDir={st?.data_dir} />
         </div>
       </div>
     </>

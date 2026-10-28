@@ -3,6 +3,7 @@ import type { Track } from '@song-sleeve/core';
 import type { LocalSongActions, Platform, Translate } from '@web/app/platform';
 import { local } from './bridge';
 import { catchUp } from './services';
+import { DesktopUpdateRequired } from './UpdateRequired';
 
 export type { LocalSongActions, Platform, Translate } from '@web/app/platform';
 
@@ -81,4 +82,5 @@ export const platform: Platform = {
     await local('POST', '/logout', { remove: true });
   },
   nav: [{ to: '/settings', icon: 'settings', label: 'nav.settings' }],
+  UpdateRequired: DesktopUpdateRequired,
 };

@@ -385,6 +385,10 @@ func (s *Shell) serveLocal(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, doc)
 		return
 	}
+	if strings.HasPrefix(path, "/update") || path == "/open-url" {
+		s.serveUpdate(w, r, path)
+		return
+	}
 	if path == "/tray" && r.Method == "PUT" {
 		// Signed out too: the tray still shows and quits.
 		var st TrayState

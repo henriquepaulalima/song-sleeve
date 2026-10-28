@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Song Sleeve
+GenericName=Music Player
+Comment=Your music on this computer, synced to your other devices
+Exec=song-sleeve
+Icon=song-sleeve
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;player;songs;playlist;
+StartupWMClass=song-sleeve
+SingleMainWindow=true

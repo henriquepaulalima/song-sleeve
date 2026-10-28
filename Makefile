@@ -6,11 +6,13 @@
 #   make test    unit tests (Go + TypeScript)
 #   make e2e     server integration tests against the local infrastructure
 #   make desktop run the desktop app against the local API (needs `make api`)
+#   make linux-packages      AppImage + .deb in dist/release
+#   make try-desktop-update  a local update channel to test the AppImage updating itself
 
 -include .env
 export
 
-.PHONY: setup infra infra-down api worker web desktop desktop-ui desktop-build test test-go test-ts e2e e2e-web typecheck admin
+.PHONY: setup infra infra-down api worker web desktop desktop-ui desktop-build linux-packages try-desktop-update test test-go test-ts e2e e2e-web typecheck admin
 
 setup: infra
 	pnpm install
@@ -34,15 +36,34 @@ web:
 # only that one. Needs libgtk-3-dev and libwebkit2gtk-4.1-dev.
 DESKTOP_TAGS ?= webkit2_41
 
+# Release builds set these (.github/workflows/release-desktop.yml). Without an
+# update URL and public key a build never updates itself.
+DESKTOP_VERSION ?= 0.1.0
+DESKTOP_API ?= http://localhost:8088/api
+DESKTOP_UPDATE_URL ?=
+DESKTOP_UPDATE_PUBKEY ?=
+DESKTOP_LDFLAGS = -s -w -X main.version=$(DESKTOP_VERSION) -X main.apiBase=$(DESKTOP_API) \
+	-X main.updateURL=$(DESKTOP_UPDATE_URL) -X main.updateKey=$(DESKTOP_UPDATE_PUBKEY)
+
 desktop-ui:
-	pnpm --filter @song-sleeve/desktop-ui build
+	SONG_SLEEVE_VERSION=$(DESKTOP_VERSION) pnpm --filter @song-sleeve/desktop-ui build
 
 desktop: desktop-ui
 	cd apps/desktop && go run -tags dev,$(DESKTOP_TAGS) .
 
 desktop-build: desktop-ui
 	mkdir -p dist
-	cd apps/desktop && go build -tags production,$(DESKTOP_TAGS) -trimpath -ldflags "-s -w" -o ../../dist/song-sleeve .
+	cd apps/desktop && go build -tags production,$(DESKTOP_TAGS) -trimpath -ldflags "$(DESKTOP_LDFLAGS)" -o ../../dist/song-sleeve .
+
+# Needs dpkg-deb and curl (fetches the pinned AppImage tools once).
+linux-packages: desktop-build
+	rm -rf dist/release
+	apps/desktop/packaging/linux/build.sh $(DESKTOP_VERSION) dist/song-sleeve dist/release
+
+# Builds 0.1.1 in dist/try and serves 0.1.2 from a local channel; run
+# dist/try/Song-Sleeve-x86_64.AppImage and watch it update (README).
+try-desktop-update:
+	apps/desktop/packaging/linux/try-update.sh
 
 test: test-go test-ts
 

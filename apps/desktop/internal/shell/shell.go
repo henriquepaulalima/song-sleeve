@@ -28,6 +28,7 @@ import (
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/device"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/library"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/songsdir"
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/update"
 )
 
 // Hooks are the platform pieces the Wails layer provides.
@@ -37,6 +38,7 @@ type Hooks struct {
 	Confirm   func(title, message string) bool
 	Open      func(path string) error // shows a file or folder in the file manager
 	Tray      func(TrayState)         // relabels the tray menu
+	Restart   func() error            // quits and starts the updated app
 }
 
 // TrayState is the tray menu as the UI sends it, translated (tray.State).
@@ -54,6 +56,7 @@ type Config struct {
 	SleeveRoot  string // the user-visible Song Sleeve folder (~/Song Sleeve)
 	DeviceLabel string
 	Hooks       Hooks
+	Updater     *update.Updater // nil: no updates (tests)
 	// FileCredentials keeps the token in a private file instead of the OS
 	// credential store (tests; SONG_SLEEVE_FILE_CREDENTIALS=1).
 	FileCredentials bool

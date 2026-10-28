@@ -1,0 +1,78 @@
+# Desktop release (§10.2, D-28): pushing a tag vX.Y.Z builds the Linux AppImage and
+# .deb, signs the update manifest and publishes all three on a GitHub Release. The
+# apps read releases/latest/download/latest.json.
+#
+# Repository settings it needs (README: Releasing the desktop app):
+#   secret   SONG_SLEEVE_UPDATE_KEY     private update key (cmd/release keygen)
+#   variable SONG_SLEEVE_UPDATE_PUBKEY  its public half, built into the app
+#   variable DESKTOP_API                production API, e.g. https://api.example.com/api
+name: Release desktop
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    # The oldest supported Ubuntu with WebKitGTK 4.1: the binary needs a glibc at
+    # least as old as the one it was built against.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release settings
+        env:
+          KEY: ${{ secrets.SONG_SLEEVE_UPDATE_KEY }}
+          PUB: ${{ vars.SONG_SLEEVE_UPDATE_PUBKEY }}
+          API: ${{ vars.DESKTOP_API }}
+        run: |
+          test -n "$KEY" || { echo "::error::secret SONG_SLEEVE_UPDATE_KEY is missing"; exit 1; }
+          test -n "$PUB" || { echo "::error::variable SONG_SLEEVE_UPDATE_PUBKEY is missing"; exit 1; }
+          test -n "$API" || { echo "::error::variable DESKTOP_API is missing"; exit 1; }
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          pnpm install --frozen-lockfile
+
+      - name: Test
+        run: cd apps/desktop && go test ./internal/update/ ./internal/shell/
+
+      - name: Build packages
+        run: |
+          make linux-packages DESKTOP_VERSION="$VERSION" DESKTOP_API="${{ vars.DESKTOP_API }}" \
+            DESKTOP_UPDATE_URL="https://github.com/${{ github.repository }}/releases/latest/download/latest.json" \
+            DESKTOP_UPDATE_PUBKEY="${{ vars.SONG_SLEEVE_UPDATE_PUBKEY }}"
+
+      - name: Sign the update manifest
+        env:
+          SONG_SLEEVE_UPDATE_KEY: ${{ secrets.SONG_SLEEVE_UPDATE_KEY }}
+        run: |
+          cd apps/desktop
+          go run ./cmd/release manifest -version "$VERSION" \
+            -page "https://github.com/${{ github.repository }}/releases/tag/$GITHUB_REF_NAME" \
+            -base "https://github.com/${{ github.repository }}/releases/download/$GITHUB_REF_NAME" \
+            -out ../../dist/release/latest.json \
+            linux-appimage=../../dist/release/Song-Sleeve-x86_64.AppImage \
+            linux-deb=../../dist/release/song-sleeve_amd64.deb
+          cd ../../dist/release && sha256sum Song-Sleeve-x86_64.AppImage song-sleeve_amd64.deb > SHA256SUMS
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/release/* --title "Song Sleeve $VERSION" --generate-notes

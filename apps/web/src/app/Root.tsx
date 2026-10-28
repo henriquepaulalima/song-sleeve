@@ -5,6 +5,7 @@ import '../styles/app.css';
 import { DialogProvider } from './dialogs';
 import { useSignal } from './hooks';
 import { I18nProvider } from './i18n';
+import { platform } from './platform';
 import { updateRequired } from './services';
 import { SessionProvider, useSession } from './session';
 import { ToastProvider } from './toasts';
@@ -91,7 +92,7 @@ function App({ extraRoutes, start }: { extraRoutes?: ReactNode; start?: ReactNod
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
-      {update && <UpdateRequired />}
+      {update && (platform.UpdateRequired ? <platform.UpdateRequired /> : <UpdateRequired />)}
     </>
   );
 }

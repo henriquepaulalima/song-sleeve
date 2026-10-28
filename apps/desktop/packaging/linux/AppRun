@@ -1,0 +1,5 @@
+#!/bin/sh
+# The AppImage's entry point. WebKitGTK, GTK and GStreamer come from the system,
+# like the .deb's dependencies (README: Desktop packages).
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/bin/song-sleeve" "$@"

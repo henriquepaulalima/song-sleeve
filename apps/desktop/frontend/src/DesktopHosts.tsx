@@ -1,6 +1,7 @@
 /**
  * Desktop-only pieces that live beside the screens: the tray menu's labels and
- * commands, and the startup notice about missing Linux codecs (§9.4).
+ * commands, the startup notice about missing Linux codecs, and the notice when
+ * a new version is found in the background (§9.4).
  */
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
@@ -11,6 +12,7 @@ import { useToasts } from '@web/app/toasts';
 import { local, onShell } from './bridge';
 import { listFormats, missingFormats } from './codecs';
 import { player, shellState } from './services';
+import { openUrl, restartToUpdate, updateStatus, watchUpdates } from './updates';
 
 function TrayBridge() {
   const { t } = useI18n();
@@ -64,11 +66,35 @@ function CodecNotice() {
   return null;
 }
 
+/** Tells once per version: AppImage when it's ready to restart, .deb when it's out. */
+function UpdateNotice() {
+  const { t } = useI18n();
+  const toasts = useToasts();
+  const st = useSignal(updateStatus);
+  const told = useRef('');
+
+  useEffect(() => watchUpdates(), []);
+  useEffect(() => {
+    if (!st?.version || told.current === st.version) return;
+    const fail = (e: unknown) => void toasts.error(e);
+    if (st.state === 'ready') {
+      told.current = st.version;
+      toasts.show(t('update.readyToast', { v: st.version }), { ms: 15_000, action: { label: t('settings.updateRestart'), run: () => void restartToUpdate().catch(fail) } });
+    } else if (st.state === 'available' && st.kind === 'deb' && st.download) {
+      told.current = st.version;
+      const url = st.download;
+      toasts.show(t('update.availableToast'), { ms: 15_000, action: { label: t('settings.updateDeb'), run: () => void openUrl(url).catch(fail) } });
+    }
+  }, [st, t, toasts]);
+  return null;
+}
+
 export function DesktopHosts() {
   return (
     <>
       <TrayBridge />
       <CodecNotice />
+      <UpdateNotice />
     </>
   );
 }

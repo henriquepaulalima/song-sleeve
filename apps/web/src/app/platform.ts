@@ -3,6 +3,7 @@
  * build replaces this module with its own (apps/desktop/frontend), so screens stay
  * free of platform checks beyond "is this action available?" (§4.3).
  */
+import type { ComponentType } from 'react';
 import type { MessageKey, Track } from '@song-sleeve/core';
 import type { IconName } from '../components/Icon';
 
@@ -26,6 +27,8 @@ export interface Platform {
   logoutAndRemove?: () => Promise<void>;
   /** Extra sidebar entries, e.g. Settings in installed apps. */
   nav?: { to: string; icon: IconName; label: MessageKey }[];
+  /** Installed apps replace the web's reload prompt for client_update_required (§4.4). */
+  UpdateRequired?: ComponentType;
 }
 
 export const platform: Platform = { kind: 'web' };
