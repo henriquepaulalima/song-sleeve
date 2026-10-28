@@ -6,6 +6,7 @@
  */
 import type { EngineEvents, PlayableTrack, PlaybackSource, PlayerEngine } from '@song-sleeve/core';
 import { local } from './bridge';
+import { missingFormats, type AudioFormat } from './codecs';
 
 export class DesktopAudioEngine implements PlayerEngine {
   private audio = new Audio();
@@ -14,7 +15,8 @@ export class DesktopAudioEngine implements PlayerEngine {
   // Pin changes go out in order: a release must never overtake the next pin.
   private pinQueue: Promise<unknown> = Promise.resolve();
 
-  constructor() {
+  /** formatOf reads the song's format from the catalog, to name a missing codec. */
+  constructor(private readonly formatOf: (trackId: string) => AudioFormat | undefined = () => undefined) {
     this.audio.preload = 'auto';
     this.audio.addEventListener('timeupdate', () => {
       this.events?.onTime(this.audio.currentTime);
@@ -52,7 +54,10 @@ export class DesktopAudioEngine implements PlayerEngine {
       };
       const fail = () => {
         cleanup();
-        reject(new Error(this.audio.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED ? 'unsupported_codec' : 'decode_error'));
+        // "Not supported" also covers unreadable files; blame the codec only when
+        // this system has no decoder for the song's format.
+        const format = this.formatOf(source.trackId);
+        reject(new Error(format && missingFormats().includes(format) ? 'unsupported_codec' : 'decode_error'));
       };
       const cleanup = () => {
         this.audio.removeEventListener('loadedmetadata', ok);

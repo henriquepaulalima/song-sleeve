@@ -129,7 +129,7 @@ export function PlayerBar() {
         {s.status === 'error' && (
           <span role="alert" className="pbar-notice">
             <Icon name="alert" />
-            {t('player.error')}
+            {t(s.error === 'unsupported_codec' ? 'player.codecMissing' : 'player.error')}
           </span>
         )}
         {loading && (

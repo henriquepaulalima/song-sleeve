@@ -22,6 +22,7 @@ export interface ShellState {
   keyring: boolean;
   folder?: { root: string; account: string };
   data_dir: string;
+  os: string; // Go's GOOS: linux, windows
 }
 
 export async function local<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {

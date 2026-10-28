@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -364,6 +365,7 @@ type stateDoc struct {
 	Keyring  bool              `json:"keyring"`
 	Folder   map[string]string `json:"folder,omitempty"`
 	DataDir  string            `json:"data_dir"`
+	OS       string            `json:"os"`
 }
 
 func decode(r *http.Request, dst any) error {
@@ -374,13 +376,26 @@ func (s *Shell) serveLocal(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	path := strings.TrimPrefix(r.URL.Path, "/local")
 	if path == "/state" {
-		doc := stateDoc{Online: s.online.Load(), Version: s.cfg.Version, MediaURL: s.media.base(), Keyring: s.creds.Keyring, DataDir: s.cfg.DataDir}
+		doc := stateDoc{Online: s.online.Load(), Version: s.cfg.Version, MediaURL: s.media.base(), Keyring: s.creds.Keyring, DataDir: s.cfg.DataDir, OS: runtime.GOOS}
 		if a := s.current(); a != nil {
 			doc.SignedIn = true
 			doc.Me = a.Me()
 			doc.Folder = map[string]string{"root": a.songs.Root, "account": a.songs.AccountDir}
 		}
 		writeJSON(w, 200, doc)
+		return
+	}
+	if path == "/tray" && r.Method == "PUT" {
+		// Signed out too: the tray still shows and quits.
+		var st TrayState
+		if err := decode(r, &st); err != nil {
+			writeErr(w, 400, "invalid_request", "Invalid body.")
+			return
+		}
+		if s.cfg.Hooks.Tray != nil {
+			s.cfg.Hooks.Tray(st)
+		}
+		w.WriteHeader(204)
 		return
 	}
 	a := s.current()

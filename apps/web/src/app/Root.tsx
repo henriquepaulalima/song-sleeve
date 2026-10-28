@@ -96,8 +96,8 @@ function App({ extraRoutes, start }: { extraRoutes?: ReactNode; start?: ReactNod
   );
 }
 
-/** The app with its providers; the web and the desktop pick the router. */
-export function Root({ Router, extraRoutes, start }: { Router: ComponentType<{ children: ReactNode }>; extraRoutes?: ReactNode; start?: ReactNode }) {
+/** The app with its providers; the web and the desktop pick the router and add their own pieces (extras). */
+export function Root({ Router, extraRoutes, start, extras }: { Router: ComponentType<{ children: ReactNode }>; extraRoutes?: ReactNode; start?: ReactNode; extras?: ReactNode }) {
   return (
     <StrictMode>
       <Router>
@@ -106,6 +106,7 @@ export function Root({ Router, extraRoutes, start }: { Router: ComponentType<{ c
             <SessionProvider>
               <DialogProvider>
                 <App extraRoutes={extraRoutes} start={start} />
+                {extras}
               </DialogProvider>
             </SessionProvider>
           </ToastProvider>

@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -22,6 +23,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/shell"
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/tray"
 )
 
 //go:embed all:frontend/dist
@@ -77,6 +79,9 @@ func openPath(p string) error {
 
 func main() {
 	var appCtx context.Context
+	// Set by Quit in the tray: the close that follows must not hide the window.
+	var quitting atomic.Bool
+	setAppName()
 	audio := []wruntime.FileFilter{{DisplayName: "Music (MP3, AAC, FLAC, WAV)", Pattern: "*.mp3;*.m4a;*.aac;*.mp4;*.flac;*.wav;*.MP3;*.M4A;*.AAC;*.FLAC;*.WAV"}}
 	sh, err := shell.New(shell.Config{
 		APIBase:    env("SONG_SLEEVE_API", "http://localhost:8088/api"),
@@ -109,6 +114,7 @@ func main() {
 				return err == nil && (r == "Delete" || r == "Yes")
 			},
 			Open: openPath,
+			Tray: func(st shell.TrayState) { tray.Update(tray.State(st)) },
 		},
 	})
 	if err != nil {
@@ -129,8 +135,31 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			appCtx = ctx
 			sh.Restore(ctx)
+			tray.Start(tray.Handlers{
+				Show: func() {
+					wruntime.WindowShow(appCtx)
+					wruntime.WindowUnminimise(appCtx)
+				},
+				Quit: func() {
+					quitting.Store(true)
+					wruntime.Quit(appCtx)
+				},
+				Action: func(name string) { wruntime.EventsEmit(appCtx, "tray", name) },
+			})
 		},
-		OnShutdown: func(context.Context) { sh.Shutdown() },
+		// Closing the window keeps the app (and its listener and playback) running
+		// while a tray icon can bring it back; without a tray host it quits.
+		OnBeforeClose: func(ctx context.Context) bool {
+			if quitting.Load() || !tray.Visible() {
+				return false
+			}
+			wruntime.WindowHide(ctx)
+			return true
+		},
+		OnShutdown: func(context.Context) {
+			tray.Stop()
+			sh.Shutdown()
+		},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: "app.songsleeve.desktop",
 			OnSecondInstanceLaunch: func(options.SecondInstanceData) {

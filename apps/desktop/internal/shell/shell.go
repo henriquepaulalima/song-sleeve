@@ -36,6 +36,15 @@ type Hooks struct {
 	PickFiles func(folder bool, title string) ([]string, error)
 	Confirm   func(title, message string) bool
 	Open      func(path string) error // shows a file or folder in the file manager
+	Tray      func(TrayState)         // relabels the tray menu
+}
+
+// TrayState is the tray menu as the UI sends it, translated (tray.State).
+type TrayState struct {
+	Labels   map[string]string `json:"labels"`
+	Playing  bool              `json:"playing"`
+	HasTrack bool              `json:"has_track"`
+	Title    string            `json:"title"`
 }
 
 type Config struct {

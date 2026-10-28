@@ -59,6 +59,8 @@ typecheck:
 e2e:
 	cd server && go test -tags integration -count=1 ./internal/e2e/ ./cmd/admin/
 	cd apps/desktop && go test -tags integration -count=1 ./internal/device/ ./internal/shell/
+	# The tray against a stand-in tray host on a private session bus.
+	cd apps/desktop && dbus-run-session -- env SONG_SLEEVE_PRIVATE_BUS=1 go test -tags integration -count=1 ./internal/tray/
 
 # Browser tests; needs `make api` and `make web` running.
 e2e-web:

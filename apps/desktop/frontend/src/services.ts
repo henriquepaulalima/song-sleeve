@@ -49,7 +49,7 @@ function resolveTrack(id: string): PlayableTrack | null {
   return { id: t.id, name: t.name, artist, durationMs: t.duration_ms, contentId: t.current_content_id, playable: t.state === 'ready' && !!t.current_content_id };
 }
 
-export const engine = new DesktopAudioEngine();
+export const engine = new DesktopAudioEngine((id) => catalog.getState().tracks.get(id)?.format);
 export const player = new PlayerController(engine, resolveTrack);
 /** Web-style uploads aren't used on the desktop (the shell syncs), but screens read the queue. */
 export const uploads = new UploadQueue(api, catalog);

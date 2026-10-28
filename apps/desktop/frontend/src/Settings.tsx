@@ -2,11 +2,12 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '@song-sleeve/core';
 import { useSignal } from '@web/app/hooks';
-import { useT } from '@web/app/i18n';
+import { useI18n } from '@web/app/i18n';
 import { useToasts } from '@web/app/toasts';
 import { Icon } from '@web/components/Icon';
 import { ShortcutList } from '@web/components/ShortcutList';
 import { local } from './bridge';
+import { FORMATS, aptCommand, listFormats, missingFormats } from './codecs';
 import { connection, refreshShellState, shellState } from './services';
 
 interface CheckResult {
@@ -27,8 +28,34 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+/** Missing GStreamer decoders on Linux (§9.4; designs/WebSettings). */
+function CodecCard() {
+  const { t, locale } = useI18n();
+  const missing = missingFormats();
+  const ready = FORMATS.filter((f) => !missing.includes(f));
+  const n = missing.length;
+  return (
+    <section className="card" aria-labelledby="h-codec" style={{ boxShadow: 'inset 0 0 0 2px var(--sand)' }}>
+      <p id="h-codec" className="cap">
+        {t('settings.codecs')}
+      </p>
+      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>
+        <strong>{t('settings.codecsMissing', { formats: listFormats(missing, locale), n })}</strong> {t('settings.codecsWhy', { n })}
+      </p>
+      <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.5, color: 'var(--muted)' }}>
+        {t('settings.codecsInstall', { n })}
+        {ready.length > 0 && <> {t('settings.codecsReady', { formats: listFormats(ready, locale), n: ready.length })}</>}
+      </p>
+      <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--muted-2)' }}>{t('settings.codecsDebian')}</p>
+      <p className="mono" style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)', wordBreak: 'break-all', userSelect: 'text' }}>
+        {aptCommand(missing)}
+      </p>
+    </section>
+  );
+}
+
 export default function Settings() {
-  const t = useT();
+  const { t } = useI18n();
   const toasts = useToasts();
   const st = useSignal(shellState);
   const conn = useSignal(connection);
@@ -139,6 +166,7 @@ export default function Settings() {
         </div>
 
         <div style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {st?.os === 'linux' && missingFormats().length > 0 && <CodecCard />}
           <section className="card" aria-labelledby="h-privacy">
             <p id="h-privacy" className="cap">
               {t('settings.privacy')}

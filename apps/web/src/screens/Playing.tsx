@@ -72,7 +72,7 @@ export default function Playing() {
           )}
           {s.status === 'error' && (
             <p role="alert" className="alert" style={{ marginTop: 18 }}>
-              {t('player.error')}
+              {t(s.error === 'unsupported_codec' ? 'player.codecMissing' : 'player.error')}
             </p>
           )}
           <div style={{ marginTop: 26 }}>

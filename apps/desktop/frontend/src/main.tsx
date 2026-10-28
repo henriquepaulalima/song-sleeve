@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { HashRouter, Navigate, Route } from 'react-router';
 import { Root } from '@web/app/Root';
+import { DesktopHosts } from './DesktopHosts';
 import Settings from './Settings';
 
 // WebKit's own right-click menu (Back, Reload, Inspect…) isn't part of the app.
@@ -11,5 +12,5 @@ document.addEventListener('contextmenu', (e) => {
 
 // The asset server serves only index.html, so routes live in the hash.
 createRoot(document.getElementById('root')!).render(
-  <Root Router={HashRouter} start={<Navigate to="/login" replace />} extraRoutes={<Route path="/settings" element={<Settings />} />} />,
+  <Root Router={HashRouter} start={<Navigate to="/login" replace />} extraRoutes={<Route path="/settings" element={<Settings />} />} extras={<DesktopHosts />} />,
 );
