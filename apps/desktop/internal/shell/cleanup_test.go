@@ -55,6 +55,40 @@ func TestInterruptedPurgeResumes(t *testing.T) {
 	}
 }
 
+// Send crash reports (D-35): on by default, saved across restarts, and shown to
+// the page with this build's DSN.
+func TestCrashReportsSetting(t *testing.T) {
+	root := t.TempDir()
+	open := func() *Shell {
+		sh, err := New(Config{APIBase: "http://127.0.0.1:1/api", Version: "0.1.0", DataDir: filepath.Join(root, "data"), SleeveRoot: filepath.Join(root, "Song Sleeve"),
+			FileCredentials: true, SentryDSN: "https://key@example.invalid/1", Environment: "test"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(sh.Shutdown)
+		return sh
+	}
+	state := func(sh *Shell) crashDoc {
+		var st stateDoc
+		json.Unmarshal(do(sh, "GET", "/local/state", "").Body.Bytes(), &st)
+		return st.Crash
+	}
+	sh := open()
+	if c := state(sh); !c.Enabled || c.DSN != "https://key@example.invalid/1" || c.Release != "0.1.0" || c.Environment != "test" {
+		t.Fatalf("defaults: %+v", c)
+	}
+	if rec := do(sh, "PUT", "/local/settings", `{"crash_reports":false}`); rec.Code != 204 {
+		t.Fatalf("PUT /local/settings = %d", rec.Code)
+	}
+	if rec := do(sh, "PUT", "/local/settings", `{}`); rec.Code != 400 {
+		t.Fatalf("an empty change = %d", rec.Code)
+	}
+	sh.Shutdown()
+	if again := open(); again.CrashReports() || state(again).Enabled {
+		t.Fatal("turning crash reports off didn't survive a restart")
+	}
+}
+
 // Deletion status and ack carry only the cleanup credential, never the signed-in
 // account's session token (they may be about another account on this device).
 func TestCleanupCallsCarryNoSessionToken(t *testing.T) {

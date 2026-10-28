@@ -37,13 +37,16 @@ web:
 DESKTOP_TAGS ?= webkit2_41
 
 # Release builds set these (.github/workflows/release-desktop.yml). Without an
-# update URL and public key a build never updates itself.
+# update URL and public key a build never updates itself; without a Sentry DSN it
+# sends no crash reports.
 DESKTOP_VERSION ?= 0.1.0
 DESKTOP_API ?= http://localhost:8088/api
 DESKTOP_UPDATE_URL ?=
 DESKTOP_UPDATE_PUBKEY ?=
+DESKTOP_SENTRY_DSN ?=
 DESKTOP_LDFLAGS = -s -w -X main.version=$(DESKTOP_VERSION) -X main.apiBase=$(DESKTOP_API) \
-	-X main.updateURL=$(DESKTOP_UPDATE_URL) -X main.updateKey=$(DESKTOP_UPDATE_PUBKEY)
+	-X main.updateURL=$(DESKTOP_UPDATE_URL) -X main.updateKey=$(DESKTOP_UPDATE_PUBKEY) \
+	-X main.sentryDSN=$(DESKTOP_SENTRY_DSN)
 
 desktop-ui:
 	SONG_SLEEVE_VERSION=$(DESKTOP_VERSION) pnpm --filter @song-sleeve/desktop-ui build

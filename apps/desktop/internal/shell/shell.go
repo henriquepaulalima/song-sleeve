@@ -24,6 +24,7 @@ import (
 
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/accountdb"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/api"
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/crash"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/creds"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/device"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/library"
@@ -62,6 +63,10 @@ type Config struct {
 	FileCredentials bool
 	// SyncDelay: see device.Config. Development builds only.
 	SyncDelay time.Duration
+	// Crash reporting (internal/crash): the page reports through the shell when a
+	// DSN is set.
+	SentryDSN, Environment string
+	CrashTest              bool // development: the page sends one test error
 }
 
 // state is the small file that remembers who was signed in.
@@ -73,6 +78,8 @@ type state struct {
 	// §7.11): ID → email. Each stays until its namespace is gone and the server
 	// acknowledged it.
 	Purges map[string]string `json:"purges,omitempty"`
+	// CrashReports is the Settings switch (D-35); nil means on, the default.
+	CrashReports *bool `json:"crash_reports,omitempty"`
 }
 
 type Shell struct {
@@ -163,6 +170,20 @@ func New(cfg Config) (*Shell, error) {
 	}
 	s.media = m
 	return s, nil
+}
+
+// CrashReports is the Settings switch for crash reports, on by default (D-35).
+func (s *Shell) CrashReports() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.st.CrashReports == nil || *s.st.CrashReports
+}
+
+func (s *Shell) setCrashReports(on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.st.CrashReports = &on
+	return s.saveState()
 }
 
 func (s *Shell) statePath() string { return filepath.Join(s.cfg.DataDir, "state.json") }
@@ -411,6 +432,7 @@ func (s *Shell) setOnline(v bool) {
 // reconciler runs one reconciliation at a time and coalesces hints (§7.9).
 func (s *Shell) reconciler(ctx context.Context, a *account) {
 	defer a.done.Done()
+	defer crash.Recover()
 	tick := time.NewTicker(5 * time.Minute) // catches up after sleep even without hints
 	defer tick.Stop()
 	for {
@@ -444,6 +466,7 @@ func (s *Shell) reconciler(ctx context.Context, a *account) {
 // hidden. Each connect starts with a catch-up; events are only hints (R-EVT-1).
 func (s *Shell) listen(ctx context.Context, a *account) {
 	defer a.done.Done()
+	defer crash.Recover()
 	backoff := time.Second
 	for ctx.Err() == nil {
 		a.reconcileSoon()

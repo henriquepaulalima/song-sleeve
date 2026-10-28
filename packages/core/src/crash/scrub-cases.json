@@ -1,0 +1,15 @@
+[
+  { "in": "open /home/alex/Music/Low Tide.flac: permission denied", "out": "open [path]: permission denied" },
+  { "in": "open C:\\Users\\Alex\\Music\\Low Tide.flac: access is denied", "out": "open [path]: access is denied" },
+  { "in": "stat ~/Song Sleeve/alex@example.com/01a1.mp3: no such file", "out": "stat [path]: no such file" },
+  { "in": "rename \"Low Tide\" failed", "out": "rename [text] failed" },
+  { "in": "playlist 'Road Trip' not found", "out": "playlist [text] not found" },
+  { "in": "artist “Beyoncé” is busy", "out": "artist [text] is busy" },
+  { "in": "user alex.m+music@example.co.uk failed to sign in", "out": "user [email] failed to sign in" },
+  { "in": "GET https://api.example.com/me/tracks?cursor=12 failed", "out": "GET [url] failed" },
+  { "in": "bad token jXo2c9QpZ1rT4vB8nM6kL0aS3dF5gH7j", "out": "bad token [token]" },
+  { "in": "sha e2cdd2c7f5057ec4b0ec7dfbbc051c3992047ed8d772c2acf823a869cdae1e85 mismatch", "out": "sha [token] mismatch" },
+  { "in": "track 01a15b86-079e-777a-bf5d-ad698a924e61 not ready", "out": "track 01a15b86-079e-777a-bf5d-ad698a924e61 not ready" },
+  { "in": "runtime error: index out of range [3] with length 3", "out": "runtime error: index out of range [3] with length 3" },
+  { "in": "TypeError: Cannot read properties of undefined (reading 'name')", "out": "TypeError: Cannot read properties of undefined (reading [text])" }
+]

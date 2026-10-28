@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/api"
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/crash"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/songsdir"
 )
 
@@ -152,6 +153,7 @@ func (s *Shell) sweepDeletions(ctx context.Context) {
 
 // runSweeps sweeps now and then every sweepEvery until ctx ends.
 func (s *Shell) runSweeps(ctx context.Context) {
+	defer crash.Recover()
 	for {
 		s.sweepDeletions(ctx)
 		select {

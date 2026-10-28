@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/api"
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/crash"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/probe"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/songsdir"
 )
@@ -182,6 +183,7 @@ func (d *Device) CancelSync(ctx context.Context, songID string) error {
 
 func (d *Device) worker(ctx context.Context) {
 	defer d.wg.Done()
+	defer crash.Recover()
 	for {
 		select {
 		case <-d.stop:

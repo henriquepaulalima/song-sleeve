@@ -10,6 +10,7 @@ import (
 	"crypto/ed25519"
 	"embed"
 	"encoding/base64"
+	"errors"
 	"io/fs"
 	"log"
 	"os"
@@ -17,13 +18,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync/atomic"
+	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/crash"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/shell"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/tray"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/update"
@@ -39,7 +43,17 @@ var (
 	apiBase   = "http://localhost:8088/api"
 	updateURL = ""
 	updateKey = "" // base64 ed25519 public key of the release signing key
+	sentryDSN = "" // crash reports (D-35); none in development
 )
+
+// crashDSN is the build's Sentry DSN, or in development builds the one from
+// SONG_SLEEVE_SENTRY_DSN.
+func crashDSN() string {
+	if v := devSentryDSN(); v != "" {
+		return v
+	}
+	return sentryDSN
+}
 
 func updater(emit func(update.Status)) *update.Updater {
 	kind, path := update.Detect()
@@ -116,6 +130,9 @@ func main() {
 		// For development without a keyring daemon.
 		FileCredentials: os.Getenv("SONG_SLEEVE_FILE_CREDENTIALS") == "1",
 		SyncDelay:       devSyncDelay(),
+		SentryDSN:       crashDSN(),
+		Environment:     buildEnvironment,
+		CrashTest:       devCrashTest(),
 		Hooks: shell.Hooks{
 			Emit: func(name string, data any) {
 				if appCtx != nil {
@@ -155,6 +172,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if dsn := crashDSN(); dsn != "" {
+		if err := crash.Init(crash.Config{DSN: dsn, Release: version, Environment: buildEnvironment, Enabled: sh.CrashReports}); err != nil {
+			log.Printf("crash reports: %v", err)
+		} else {
+			log.Printf("crash reports: on (%s, %s); Settings can turn them off", buildEnvironment, version)
+		}
+		if devCrashTest() {
+			// A fake name and path, to show the scrubbing in the report.
+			sentry.CaptureException(errors.New(`crash test from the Go side: open "/home/test/Music/Test Song.mp3"`))
+			log.Printf("crash reports: sent a test error from the Go side")
+		}
+	}
+	defer crash.Recover()
 	dist, err := fs.Sub(assets, "frontend/dist")
 	if err != nil {
 		log.Fatal(err)
@@ -195,6 +225,7 @@ func main() {
 		OnShutdown: func(context.Context) {
 			tray.Stop()
 			sh.Shutdown()
+			sentry.Flush(2 * time.Second)
 		},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: "app.songsleeve.desktop",

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/api"
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/crash"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/library"
 )
 
@@ -366,6 +367,16 @@ type stateDoc struct {
 	Folder   map[string]string `json:"folder,omitempty"`
 	DataDir  string            `json:"data_dir"`
 	OS       string            `json:"os"`
+	Crash    crashDoc          `json:"crash"`
+}
+
+// crashDoc lets the page set up its crash reporting the same way as the shell.
+type crashDoc struct {
+	Enabled     bool   `json:"enabled"` // the Settings switch
+	DSN         string `json:"dsn,omitempty"`
+	Release     string `json:"release"`
+	Environment string `json:"environment,omitempty"`
+	Test        bool   `json:"test,omitempty"`
 }
 
 func decode(r *http.Request, dst any) error {
@@ -376,7 +387,8 @@ func (s *Shell) serveLocal(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	path := strings.TrimPrefix(r.URL.Path, "/local")
 	if path == "/state" {
-		doc := stateDoc{Online: s.online.Load(), Version: s.cfg.Version, MediaURL: s.media.base(), Keyring: s.creds.Keyring, DataDir: s.cfg.DataDir, OS: runtime.GOOS}
+		doc := stateDoc{Online: s.online.Load(), Version: s.cfg.Version, MediaURL: s.media.base(), Keyring: s.creds.Keyring, DataDir: s.cfg.DataDir, OS: runtime.GOOS,
+			Crash: crashDoc{Enabled: s.CrashReports(), DSN: s.cfg.SentryDSN, Release: s.cfg.Version, Environment: s.cfg.Environment, Test: s.cfg.CrashTest}}
 		if a := s.current(); a != nil {
 			doc.SignedIn = true
 			doc.Me = a.Me()
@@ -387,6 +399,25 @@ func (s *Shell) serveLocal(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(path, "/update") || path == "/open-url" {
 		s.serveUpdate(w, r, path)
+		return
+	}
+	if path == "/sentry" && r.Method == "POST" {
+		crash.Tunnel(w, r)
+		return
+	}
+	if path == "/settings" && r.Method == "PUT" {
+		var req struct {
+			CrashReports *bool `json:"crash_reports"`
+		}
+		if err := decode(r, &req); err != nil || req.CrashReports == nil {
+			writeErr(w, 400, "invalid_request", "Invalid body.")
+			return
+		}
+		if err := s.setCrashReports(*req.CrashReports); err != nil {
+			writeErr(w, 500, "internal", err.Error())
+			return
+		}
+		w.WriteHeader(204)
 		return
 	}
 	if path == "/tray" && r.Method == "PUT" {

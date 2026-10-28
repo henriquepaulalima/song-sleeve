@@ -8,6 +8,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/crash"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/songsdir"
 )
 
@@ -22,6 +23,7 @@ var watchDelay = 2 * time.Second
 // deleting anything.
 func (s *Shell) watchFolder(ctx context.Context, a *account) {
 	defer a.done.Done()
+	defer crash.Recover()
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		slog.Warn("folder watcher unavailable", "error", err)

@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "@sentry/browser": "11.7.0",
     "@song-sleeve/core": "workspace:*",
     "@song-sleeve/web": "workspace:*",
     "react": "19.3.0",

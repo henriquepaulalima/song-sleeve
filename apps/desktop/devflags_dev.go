@@ -24,3 +24,14 @@ func devSyncDelay() time.Duration {
 	log.Printf("development: every sync waits %s before uploading", d)
 	return d
 }
+
+// devCrashTest reads SONG_SLEEVE_DEV_CRASH_TEST=1: at startup the Go side and the
+// page each send one test error, to check crash reports end to end.
+func devCrashTest() bool { return os.Getenv("SONG_SLEEVE_DEV_CRASH_TEST") == "1" }
+
+// devSentryDSN reads SONG_SLEEVE_SENTRY_DSN, to try crash reports from a
+// development build. Release builds only use the DSN built into them.
+func devSentryDSN() string { return os.Getenv("SONG_SLEEVE_SENTRY_DSN") }
+
+// buildEnvironment tags crash reports.
+const buildEnvironment = "development"

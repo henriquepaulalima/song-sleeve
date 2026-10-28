@@ -511,6 +511,8 @@ export const ptBR: Shape = {
   'settings.healthDone': { one: "{n} música mudou desde a última verificação.", other: "{n} músicas mudaram desde a última verificação." },
   'settings.healthNone': "Todas as músicas locais estão onde estavam.",
   'settings.privacy': "PRIVACIDADE",
+  'settings.crash': "Enviar relatórios de erro",
+  'settings.crashNote': "Nunca inclui nomes de músicas nem caminhos de arquivos.",
   'settings.keyring': "Seu login fica guardado no chaveiro do sistema.",
   'settings.noKeyring': "Nenhum chaveiro do sistema está rodando, então seu login fica num arquivo privado na pasta de dados do Song Sleeve.",
   'settings.about': "SOBRE",

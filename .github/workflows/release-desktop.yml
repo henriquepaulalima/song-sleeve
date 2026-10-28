@@ -6,6 +6,7 @@
 #   secret   SONG_SLEEVE_UPDATE_KEY     private update key (cmd/release keygen)
 #   variable SONG_SLEEVE_UPDATE_PUBKEY  its public half, built into the app
 #   variable DESKTOP_API                production API, e.g. https://api.example.com/api
+#   variable DESKTOP_SENTRY_DSN         crash reports (optional; none without it)
 name: Release desktop
 
 on:
@@ -57,7 +58,8 @@ jobs:
         run: |
           make linux-packages DESKTOP_VERSION="$VERSION" DESKTOP_API="${{ vars.DESKTOP_API }}" \
             DESKTOP_UPDATE_URL="https://github.com/${{ github.repository }}/releases/latest/download/latest.json" \
-            DESKTOP_UPDATE_PUBKEY="${{ vars.SONG_SLEEVE_UPDATE_PUBKEY }}"
+            DESKTOP_UPDATE_PUBKEY="${{ vars.SONG_SLEEVE_UPDATE_PUBKEY }}" \
+            DESKTOP_SENTRY_DSN="${{ vars.DESKTOP_SENTRY_DSN }}"
 
       - name: Sign the update manifest
         env:

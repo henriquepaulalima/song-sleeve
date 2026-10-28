@@ -507,6 +507,8 @@ export const en = {
   'settings.healthDone': { one: "{n} song changed since the last check.", other: "{n} songs changed since the last check." },
   'settings.healthNone': "Every local song is where it was.",
   'settings.privacy': "PRIVACY",
+  'settings.crash': "Send crash reports",
+  'settings.crashNote': "Never includes song names or file paths.",
   'settings.keyring': "Your sign-in is kept in the system keyring.",
   'settings.noKeyring': "No system keyring is running, so your sign-in is kept in a private file in Song Sleeve’s data folder.",
   'settings.about': "ABOUT",

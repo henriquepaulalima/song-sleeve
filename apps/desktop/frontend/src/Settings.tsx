@@ -7,6 +7,8 @@ import { useToasts } from '@web/app/toasts';
 import { Icon } from '@web/components/Icon';
 import { ShortcutList } from '@web/components/ShortcutList';
 import { local } from './bridge';
+import { setCrashReports } from './crash';
+import { SyncSwitch } from '@web/components/SyncControl';
 import { FORMATS, aptCommand, listFormats, missingFormats } from './codecs';
 import { connection, refreshShellState, shellState } from './services';
 import { checkForUpdate, openUrl, restartToUpdate, updateStatus } from './updates';
@@ -52,6 +54,38 @@ function CodecCard() {
         {aptCommand(missing)}
       </p>
     </section>
+  );
+}
+
+/** Send crash reports (D-35, designs/WebSettings): on by default. */
+function CrashSwitch() {
+  const t = useI18n().t;
+  const toasts = useToasts();
+  const st = useSignal(shellState);
+  const [busy, setBusy] = useState(false);
+  const on = st?.crash.enabled ?? true;
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await local('PUT', '/settings', { crash_reports: !on });
+      setCrashReports(!on);
+      await refreshShellState();
+    } catch (e) {
+      toasts.error(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span id="l-crash" style={{ fontSize: 15, fontWeight: 600 }}>
+          {t('settings.crash')}
+        </span>
+        <span style={{ fontSize: 13, color: 'var(--muted-2)' }}>{t('settings.crashNote')}</span>
+      </span>
+      <SyncSwitch checked={on} busy={busy} label={t('settings.crash')} onToggle={() => void toggle()} />
+    </div>
   );
 }
 
@@ -241,7 +275,8 @@ export default function Settings() {
             <p id="h-privacy" className="cap">
               {t('settings.privacy')}
             </p>
-            <p style={{ margin: 0, display: 'flex', gap: 8, fontSize: 14, lineHeight: 1.45 }}>
+            <CrashSwitch />
+            <p style={{ margin: '16px 0 0', display: 'flex', gap: 8, fontSize: 14, lineHeight: 1.45 }}>
               <Icon name="lock" size={18} style={{ flex: 'none', color: 'var(--sand)' }} />
               {st?.keyring === false ? t('settings.noKeyring') : t('settings.keyring')}
             </p>
