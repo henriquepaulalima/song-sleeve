@@ -1010,6 +1010,34 @@ Sources: [browser limits report](research/reports/Song%20sizes%20and%20browser%2
 - **Fallback rule:** if Wails fails any item above and the failure can't be fixed within the spike's time box, switch to Electron and run the same list again.
 - **Behavior:** as in the "Desktop minimized" row of §7.10. No push service is needed, because the process keeps its SSE stream open and catches up after sleep.
 
+### 9.4.1 Windows hand-off (pending a Windows machine)
+
+The desktop app was built and tested on Linux first (Debian 13, GNOME, WebKitGTK 2.54). Windows was postponed until there's a Windows machine to test on. This section is the context for picking it up; tick the items off here as they're done.
+
+**State when Linux was finished (2026-10-28).** Everything in the Go core and the shell (`apps/desktop/internal/…`) is platform-neutral and cross-compiles: `GOOS=windows CGO_ENABLED=0 go build -tags production ./apps/desktop` succeeds, since Wails needs no cgo on Windows. It has never *run* on Windows. These pieces are Linux-only or stubbed for Windows:
+
+| Piece | Linux | Windows today | Where |
+| --- | --- | --- | --- |
+| App data and `Song Sleeve` folder | `~/.local/share/song-sleeve`, `~/Song Sleeve` | `%LOCALAPPDATA%\Song Sleeve`, `%USERPROFILE%\Song Sleeve` (written, untested) | `main.go` `dataDir`, `sleeveRoot` |
+| Sign-in token | Secret Service (libsecret) via go-keyring | Credential Manager via go-keyring (untested) | `internal/creds` |
+| Show in folder | `xdg-open` | `explorer` (untested; should select the file with `explorer /select,`) | `main.go` `openPath` |
+| Tray icon, close to tray | StatusNotifierItem (fyne.io/systray over D-Bus) | **stub**: no icon, closing quits | `internal/tray/tray_other.go` |
+| System media controls | WebKitGTK's own MPRIS; `g_set_application_name` names it | WebView2 should map the Media Session to SMTC; nothing is named yet | `frontend/src/engine.ts`, `appname_other.go` |
+| Codec check | GStreamer via `canPlayType`; Settings card only on Linux | WebView2 plays all four D-8 formats, so no card is expected | `frontend/src/codecs.ts` |
+| Packages and updates | AppImage (self-updating), `.deb` (notice), signed `latest.json` | **none**: `update.Detect` returns `Dev`; `Relaunch` is a stub | `internal/update`, `packaging/linux`, `.github/workflows/release-desktop.yml` |
+
+**Work to do, in order.**
+
+1. **Run it as is.** Install Go (the version in `apps/desktop/go.mod`), Node 20.19+ and pnpm. The WebView2 runtime ships with Windows 11. Run `pnpm install`, then `pnpm --filter @song-sleeve/desktop-ui build` and `cd apps/desktop && go run -tags dev .` (no `webkit2_41` tag on Windows). `make` isn't needed, but works from Git Bash with `DESKTOP_TAGS=`. Point it at the API on the Linux machine with `SONG_SLEEVE_API=http://<linux-ip>:8088/api`: the API listens on `0.0.0.0`, and the docker infrastructure can stay on Linux. Fix whatever breaks first: paths, the keyring, `explorer`, the loopback media server, the single-instance lock.
+2. **Media controls (SMTC).** Play a song and check the Windows media flyout: title, artist, Play/Pause/Next/Previous, seeking. If WebView2's Media Session doesn't reach SMTC, add native SMTC (WinRT `SystemMediaTransportControls`) the way §9.4 allows for MPRIS. Give the process an AppUserModelID (`SetCurrentProcessExplicitAppUserModelID("app.songsleeve.desktop")`) in a Windows twin of `appname_linux.go`, so the flyout and toasts say "Song Sleeve".
+3. **Tray.** Implement `internal/tray` for Windows with the same API (`Start`, `Update`, `Visible`, `Stop`). fyne.io/systray works on Windows, but its message loop must run on the thread that created the icon. `RunWithExternalLoop` starts the loop on another goroutine, so on Windows it gets no clicks. Use a dedicated goroutine with `runtime.LockOSThread()` and call `systray.Run(onReady, onExit)` there, which blocks. `Visible()` is simply `true` once the icon exists: Windows always has a notification area. The UI side (`DesktopHosts.tsx`, `PUT /local/tray`, the `tray` event) is shared and needs no change.
+4. **Installer (D-34, unsigned for now).** Write an NSIS script in `apps/desktop/packaging/windows/` that installs per user into `%LOCALAPPDATA%\Programs\Song Sleeve` (no admin prompt) and adds Start-menu and uninstall entries. The uninstaller keeps the app data and the `Song Sleeve` folder. Build the exe with `GOOS=windows CGO_ENABLED=0 go build -tags production -ldflags "$(DESKTOP_LDFLAGS) -H windowsgui"` plus an icon resource (e.g. `go-winres` from `build/appicon.png`). `makensis` also runs on Linux (`apt install nsis`), so CI can build Windows in the existing Ubuntu job. Asset name: `Song-Sleeve-Setup-x64.exe`.
+5. **Updater.** Add `update.Windows` to `Detect` (the exe runs from `%LOCALAPPDATA%\Programs\Song Sleeve`) and the asset key `windows-installer` to the manifest. A running exe can't be replaced, so the flow differs from the AppImage: download the installer to `%TEMP%`, check its size and SHA-256 against the signed manifest (same code as `install`, without the rename), mark the state `ready`, and on **Restart to update** start the installer silently (`/S`) with a flag that relaunches the app. Then quit. `relaunch_windows.go` becomes that. The UI states (`ready`, Restart to update) are already shared.
+6. **Release workflow.** Add the Windows build and installer to `release-desktop.yml`, and pass `windows-installer=…` to `cmd/release manifest` so one signed `latest.json` covers all three files. The SmartScreen note goes on the landing page (§10.2, M6).
+7. **Windows file behavior to check** in the folder check and sync: case-insensitive names; open files can't be deleted or renamed (the playing file is already never removed, but the folder check must skip locked files and retry instead of failing); paths over 260 characters; antivirus briefly locking new downloads.
+
+**Done when.** Every M4 exit test (§12.1) passes on Windows, including "System media controls stay in sync (Windows SMTC…)", "updates work for each" and the folder check list, plus: the tray icon shows, plays, pauses, skips and quits, and closing the window keeps playback and the listener running; an installed copy updates itself from a local channel. Build a Windows variant of `packaging/linux/try-update.sh` for that. `go test ./...` in `apps/desktop` passes on Windows, and `make e2e`'s desktop tests pass against the Linux API.
+
 ### 9.5 Mobile (Android, Capacitor)
 
 - **Files:** the `Song Sleeve` folder at the top of user storage, through a SAF tree grant the user approves once (no all-files permission). Never under `Cache`. Staging and temp files stay in app-private storage.

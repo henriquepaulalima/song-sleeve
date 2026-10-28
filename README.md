@@ -49,10 +49,56 @@ The app keeps its data in `~/.local/share/song-sleeve`, mirrors synced songs int
 `~/Song Sleeve`, and stores the sign-in token in the system keyring. Override with
 `SONG_SLEEVE_DATA_DIR`, `SONG_SLEEVE_FOLDER`, `SONG_SLEEVE_API`, and
 `SONG_SLEEVE_FILE_CREDENTIALS=1` (token in a private file, for machines without a
-keyring daemon).
+keyring daemon). In development builds only, `SONG_SLEEVE_DEV_SYNC_DELAY=1m make
+desktop` makes every sync wait that long before uploading, to try things mid-sync
+(log out, cancel, quit) on a fast local network. With a Sentry DSN set, `SONG_SLEEVE_DEV_CRASH_TEST=1`
+sends one test error from the Go side and one from the page at startup.
 
 Operator CLI (§10.5): `make admin ARGS="usage owner@example.com"`, also `set-quota`,
 `cloud-sync on|off`, `suspend`, `unsuspend`, `delete-account`, `stalled`.
+
+### Desktop packages and updates (Linux)
+
+```sh
+make linux-packages DESKTOP_VERSION=0.2.0   # dist/release: Song-Sleeve-x86_64.AppImage, song-sleeve_amd64.deb
+make try-desktop-update                     # a local update channel (below)
+```
+
+Both packages hold the same binary. They use the system's GTK, WebKitGTK 4.1 and
+GStreamer (the `.deb` depends on them; the AppImage expects them, like any Wails
+app), so the AppImage runs on distributions that ship WebKitGTK 4.1: Debian 12+,
+Ubuntu 22.04+, Fedora 38+. The AppImage tools are pinned by SHA-256 in
+`apps/desktop/packaging/linux/build.sh`.
+
+Updates (§9.4, D-28): each GitHub Release carries `latest.json`, a manifest of the
+build's files signed with the release key (ed25519). The app checks
+`releases/latest/download/latest.json` 15 seconds after start, every 6 hours and from
+**Settings → Check for updates**. The AppImage downloads the new file next to itself,
+checks it against the signed manifest, swaps it in and offers **Restart to update**.
+If its folder isn't writable it links to the release page instead. The `.deb` only
+says a new version exists and links to the new package. Builds without an update URL
+and key (`make desktop`, `make desktop-build`) never update.
+
+**Try it locally:** `make try-desktop-update` builds version 0.1.1 into `dist/try`,
+publishes 0.1.2 with a throwaway key on `http://127.0.0.1:8099`, and serves it until
+Ctrl+C. With `make api` running, start `dist/try/Song-Sleeve-x86_64.AppImage`, open
+Settings, press **Check for updates**, then **Restart to update**. Settings then
+shows version 0.1.2. To try the update-required screen instead, set
+`MIN_CLIENT_VERSION_DESKTOP=0.1.2` in `.env` and restart `make api`: 0.1.1 is refused,
+the screen downloads 0.1.2, and after the restart the app syncs again. Versions
+below the API's minimum (0.1.0 by default) are always refused.
+
+**Releasing:** pushing a tag `vX.Y.Z` runs `.github/workflows/release-desktop.yml`,
+which builds on Ubuntu 22.04 (oldest glibc), signs the manifest and publishes the
+release. One-time setup:
+
+1. `cd apps/desktop && go run ./cmd/release keygen -out ~/song-sleeve-keys`. Keep
+   `update-key` offline as the backup (§10.2); losing it means the installed apps
+   can't verify updates any more.
+2. In the repository settings, add the secret `SONG_SLEEVE_UPDATE_KEY` (the
+   contents of `update-key`) and the variables `SONG_SLEEVE_UPDATE_PUBKEY` (the
+   contents of `update-key.pub`) and `DESKTOP_API` (the production API, e.g.
+   `https://api.example.com/api`, once it's deployed).
 
 ## Tests
 
@@ -74,7 +120,8 @@ make e2e-web    # Playwright browser tests (needs `make api` and `make web` runn
   CLI. They create and use their own `songsleeve_test` database, so a running dev API
   doesn't interfere. Audio fixtures are generated with ffmpeg. The desktop tests
   run the device sync service and the shell (proxy, local songs, overlay, media
-  server, offline start, purge) against the same real API.
+  server, offline start, purge) against the same real API, and the tray against a
+  stand-in tray host on a private D-Bus session (`dbus-run-session`).
 - **Browser (`make e2e-web`):** sign in as `owner@example.com` on the dev database and
   add songs to it; they reset the local rate-limit counters first. Set
   `E2E_DELETE_EMAIL` to an allowlisted throwaway account to also run the account
@@ -88,6 +135,9 @@ apps/desktop        Desktop app (M4, in progress): Wails shell (main.go) and Go 
                     per-account SQLite, local songs and overlay, the Song Sleeve folder and
                     folder check, pure-Go audio prober, reconciliation, downloads, pins,
                     the sync queue, and internal/shell (API proxy, local data, media server)
+apps/desktop/internal/tray, internal/update  Tray icon (Linux) and the self-updater
+apps/desktop/cmd/release  Update key generation and the signed latest.json
+apps/desktop/packaging/linux  AppImage and .deb packaging, local update channel
 apps/desktop/frontend  The web screens with desktop modules swapped in at build time
                     (services, platform hooks, Add songs dialog) plus Settings
 packages/core       Shared TS services: API client, catalog store, sync service,
@@ -138,14 +188,31 @@ Local songs show **On this device**, with Sync to cloud, Try again, Relink, Use
 changed file and Show in folder; Add songs picks files or folders natively; songs
 play from their file (or the Songs folder, or a stream) through a loopback media
 server with seeking; Settings has Check Songs folder; Profile has Log out and remove
-from this device. Not yet: a tray icon, native MPRIS when WebKitGTK's Media Session
-doesn't provide it, the GStreamer codec check, crash reports, cleanup credentials,
-installers (AppImage, `.deb`, Windows) and auto-update. Windows isn't tested.
+from this device. A folder watcher runs the quick check a couple of seconds after
+anything changes in the Song Sleeve folder, so songs deleted or edited by hand come
+back and stray files go while the app runs. Logging out (or switching accounts) with
+syncs running cancels them on the server first; plain Log out puts them back in the
+queue for the next login. A tray icon (StatusNotifierItem) shows the window, plays, pauses,
+skips and quits; while a tray host shows it, closing the window keeps the app running.
+GNOME needs the AppIndicator extension for it; without a host, closing quits. System
+media controls are WebKitGTK's own MPRIS (checked with 2.54), named "Song Sleeve". On
+Linux, missing GStreamer decoders are found at startup and explained in a notice and
+in Settings. Linux ships as an AppImage that updates itself and a `.deb` that
+announces new versions, both from one binary and published by the release workflow
+(see Desktop packages and updates). Crash reports (D-35) go to Sentry when a build
+has a DSN (`DESKTOP_SENTRY_DSN`; development builds take `SONG_SLEEVE_SENTRY_DSN`):
+panics in the Go side and errors in the page, the page's through the shell
+(`/local/sentry`), all rebuilt from an allowlist and scrubbed of names, paths,
+emails, URLs and tokens by `server/pkg/scrub` and its twin in `packages/core`
+(shared cases). **Send crash reports** in Settings is on by default. Installed apps
+get a cleanup credential at every login; it survives logout, so a deletion made
+elsewhere purges this device's copy of the account (signed in or not) at the next
+check, and the device acknowledges it. A plain 401 never deletes anything. Not yet:
+everything Windows (tray, installer, updater; the hand-off is in the plan, §9.4.1).
 
 **Not started:** the Android app (M5); the landing page,
-final Terms/Privacy pages (drafts are linked for now), Sentry, observability and
-release work (M6). The cleanup-credential endpoints exist, but credentials are only
-issued once the installed apps exist.
+final Terms/Privacy pages (drafts are linked for now), Sentry for the server and the
+web app, observability and release work (M6).
 
 **Deviations from the plan's proposals (§4.1, §4.3):**
 
