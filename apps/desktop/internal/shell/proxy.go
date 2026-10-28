@@ -95,23 +95,24 @@ func (s *Shell) serveAPI(w http.ResponseWriter, r *http.Request) {
 	case isAuth && status < 300:
 		var auth api.AuthResponse
 		if json.Unmarshal(resp, &auth) == nil && auth.Token != "" {
-			if err := s.signedIn(auth.Account, auth.Token); err != nil {
+			if err := s.signedIn(auth.Account, auth.Token, auth.CleanupCredential); err != nil {
 				writeErr(w, 500, "internal", "Could not save your sign-in on this device: "+err.Error())
 				return
 			}
-			// The token stays in the shell; the webview never sees it.
+			// The token and the cleanup credential stay in the shell; the webview
+			// never sees them.
 			resp, _ = json.Marshal(map[string]any{"account": auth.Account})
 		}
 	case path == "/auth/logout" && r.Method == "POST":
 		_ = s.dropSession(false)
 	case status == 401 && a != nil && path != "/auth/reauthenticate" && path != "/me/password":
-		go s.dropSession(false)
+		go s.sessionEnded(a.id)
 	case a != nil && status < 300 && r.Method != "GET":
 		switch {
 		case path == "/me" || path == "/me/terms":
 			go s.refreshMe(context.Background())
 		case path == "/me/account-deletion":
-			go s.dropSession(true)
+			go s.purgeAccount(context.Background(), a.id)
 		case path == "/me/sessions/revoke-all":
 			go s.dropSession(false)
 		}

@@ -557,3 +557,85 @@ func TestLogoutMidSyncThroughTheShell(t *testing.T) {
 		return false
 	})
 }
+
+// Account deletion on devices (§7.11, R-AUTH-6): the deleting device purges at
+// once; another installation that was only logged out (its data kept, D-9) learns
+// of it with its cleanup credential at its next sweep and purges too. Both ack.
+// A plain 401 never deletes anything.
+func TestAccountDeletionPurgesDevices(t *testing.T) {
+	email := fmt.Sprintf("purge-%s@example.com", uuid.NewString()[:8])
+	a := newApp(t, t.TempDir(), baseURL)
+	a.register(email)
+	acct := a.state().Me.ID
+	a.importSongs("Kept Then Gone")
+
+	// The credential stays in the shell.
+	var raw map[string]any
+	a.must("POST", "/api/auth/login", map[string]any{"email": email, "password": "saltwater-hymn"}, &raw)
+	if _, leaked := raw["cleanup_credential"]; leaked {
+		t.Fatal("the cleanup credential reached the webview")
+	}
+	if cred, _ := a.sh.creds.Get(cleanupKey(acct)); cred == "" {
+		t.Fatal("no cleanup credential stored")
+	}
+
+	// Another installation: signed in, given local data, then logged out.
+	b := newApp(t, t.TempDir(), baseURL)
+	b.signIn(email)
+	b.importSongs("Only On B")
+	b.must("POST", "/local/logout", map[string]any{"remove": false}, nil)
+	bFolder := filepath.Join(b.root, "Song Sleeve", songsdir.AccountFolderName(email))
+	bData := filepath.Join(b.root, "data", "accounts", acct)
+	b.sh.sweepDeletions(context.Background())
+	if _, err := os.Stat(bData); err != nil {
+		t.Fatal("a sweep of a live account deleted its data:", err)
+	}
+
+	// A plain 401 (all sessions revoked) keeps the data.
+	c := newApp(t, t.TempDir(), baseURL)
+	c.signIn(email)
+	cData := filepath.Join(c.root, "data", "accounts", acct)
+	a.must("POST", "/api/me/sessions/revoke-all", nil, nil)
+	a.signIn(email)
+	c.call("GET", "/api/me", nil, nil) // 401
+	waitFor(t, "the revoked device to sign out", func() bool { return !c.state().SignedIn })
+	if _, err := os.Stat(cData); err != nil {
+		t.Fatal("a 401 deleted the account's data:", err)
+	}
+
+	// Delete the account from a.
+	var proof struct {
+		Proof string `json:"proof"`
+	}
+	a.must("POST", "/api/auth/reauthenticate", map[string]any{"password": "saltwater-hymn", "purpose": "delete_account"}, &proof)
+	a.must("POST", "/api/me/account-deletion", map[string]any{"proof": proof.Proof, "confirmed": true}, nil)
+	aFolder := filepath.Join(a.root, "Song Sleeve", songsdir.AccountFolderName(email))
+	aData := filepath.Join(a.root, "data", "accounts", acct)
+	waitFor(t, "the deleting device to purge and acknowledge", func() bool {
+		_, e1 := os.Stat(aFolder)
+		_, e2 := os.Stat(aData)
+		cred, _ := a.sh.creds.Get(cleanupKey(acct))
+		a.sh.mu.Lock()
+		_, pending := a.sh.st.Purges[acct]
+		a.sh.mu.Unlock()
+		return os.IsNotExist(e1) && os.IsNotExist(e2) && cred == "" && !pending
+	})
+
+	// b was offline for all of it: its next sweep finds the deletion.
+	b.sh.sweepDeletions(context.Background())
+	for _, p := range []string{bFolder, bData} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s survived the deletion: %v", p, err)
+		}
+	}
+	b.sh.mu.Lock()
+	_, known := b.sh.st.Known[acct]
+	_, pending := b.sh.st.Purges[acct]
+	b.sh.mu.Unlock()
+	if known || pending {
+		t.Fatal("b still lists the deleted account or its purge")
+	}
+	if _, err := os.Stat(filepath.Join(b.root, "Music", "Only On B.wav")); err != nil {
+		t.Fatal("the purge touched a source file:", err)
+	}
+}

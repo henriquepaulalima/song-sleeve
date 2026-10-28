@@ -30,16 +30,28 @@ type deviceInfo struct {
 	Label          string `json:"label"`
 }
 
+// session is what a login or registration opens.
+type session struct {
+	id, deviceID uuid.UUID
+	token        string
+	// cleanup is the installed app's restricted cleanup credential (R-AUTH-6):
+	// it only reads this account's deletion status and acknowledges the device's
+	// purge, and it outlives the sessions and the user row. Empty on the web.
+	cleanup string
+}
+
 // createSession registers (or reuses) the device and opens a 90-day session bound
 // to its transport (R-AUTH-3). The web gets a new device per login (F-25).
-func createSession(ctx context.Context, tx pgx.Tx, d *app.Deps, userID uuid.UUID, platform string, dev deviceInfo, userAgent string) (sessionID, deviceID uuid.UUID, token string, err error) {
+// Installed apps also get a fresh cleanup credential, which replaces the device's
+// earlier one for this account.
+func createSession(ctx context.Context, tx pgx.Tx, d *app.Deps, userID uuid.UUID, platform string, dev deviceInfo, userAgent string) (out session, err error) {
 	transport := "bearer"
 	if platform == "web" {
 		transport = "cookie"
 		dev = deviceInfo{InstallationID: "web-" + uuid.NewString(), Label: webLabel(userAgent)}
 	}
 	if dev.InstallationID == "" || len(dev.InstallationID) > 100 {
-		return uuid.Nil, uuid.Nil, "", apperr.Field("device.installation_id", "required")
+		return out, apperr.Field("device.installation_id", "required")
 	}
 	label := strings.TrimSpace(dev.Label)
 	if label == "" {
@@ -53,16 +65,31 @@ func createSession(ctx context.Context, tx pgx.Tx, d *app.Deps, userID uuid.UUID
 		INSERT INTO devices (id, user_id, installation_id, platform, label)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (user_id, installation_id) DO UPDATE SET label = EXCLUDED.label, last_seen_at = now()
-		RETURNING id`, newDevice, userID, dev.InstallationID, platform, label).Scan(&deviceID)
+		RETURNING id`, newDevice, userID, dev.InstallationID, platform, label).Scan(&out.deviceID)
 	if err != nil {
 		return
 	}
 	token, hash := crypt.NewToken()
-	sessionID, _ = uuid.NewV7()
+	out.token = token
+	out.id, _ = uuid.NewV7()
 	_, err = tx.Exec(ctx, `
 		INSERT INTO user_sessions (id, user_id, device_id, token_hash, transport, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6)`,
-		sessionID, userID, deviceID, hash, transport, time.Now().Add(d.Cfg.SessionLifetime))
+		out.id, userID, out.deviceID, hash, transport, time.Now().Add(d.Cfg.SessionLifetime))
+	if err != nil || transport != "bearer" {
+		return
+	}
+	cleanup, cleanupHash := crypt.NewToken()
+	if _, err = tx.Exec(ctx, `DELETE FROM device_cleanup_receipts WHERE original_user_id = $1 AND device_id = $2 AND deletion_request_id IS NULL`, userID, out.deviceID); err != nil {
+		return
+	}
+	receiptID, _ := uuid.NewV7()
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO device_cleanup_receipts (id, original_user_id, device_id, credential_hash) VALUES ($1, $2, $3, $4)`,
+		receiptID, userID, out.deviceID, cleanupHash); err != nil {
+		return
+	}
+	out.cleanup = cleanup
 	return
 }
 

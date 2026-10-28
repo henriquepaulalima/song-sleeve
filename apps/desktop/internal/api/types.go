@@ -133,6 +133,8 @@ type Me struct {
 type AuthResponse struct {
 	Account Me     `json:"account"`
 	Token   string `json:"token"`
+	// CleanupCredential reads only this account's deletion status (R-AUTH-6).
+	CleanupCredential string `json:"cleanup_credential"`
 }
 
 type OperationDoc struct {

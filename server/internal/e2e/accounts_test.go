@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/henriquepaulalima/song-sleeve/server/internal/storage"
 )
 
@@ -346,4 +348,99 @@ func sha(path string) string {
 	data, _ := os.ReadFile(path)
 	s := sha256.Sum256(data)
 	return hex.EncodeToString(s[:])
+}
+
+// Installed apps get a restricted cleanup credential at login (R-AUTH-6, §7.11):
+// it reads only this account's deletion status, outlives the sessions and the
+// user row, and acknowledges the device's purge.
+func TestCleanupCredentials(t *testing.T) {
+	resetRateLimits(t)
+	email := uniqueEmail("cleanup")
+	install := uuid.NewString()
+	auth := func(path string, extra map[string]any) map[string]any {
+		body := map[string]any{"email": email, "password": testPassword, "device": map[string]any{"installation_id": install, "label": "Test PC"}}
+		for k, v := range extra {
+			body[k] = v
+		}
+		status := http.StatusOK
+		if path == "/auth/register" {
+			status = http.StatusCreated
+		}
+		return expect(t, newClient(t, "desktop").do("POST", path, body, ""), status)
+	}
+	status := func(cred string) resp {
+		return newClient(t, "desktop").do("POST", "/account-deletion/status", map[string]any{"credential": cred}, "")
+	}
+	ack := func(cred string) resp {
+		return newClient(t, "desktop").do("POST", "/account-deletion/ack", map[string]any{"credential": cred}, "")
+	}
+
+	reg := auth("/auth/register", map[string]any{"accepted_terms": true, "terms_version": "2026-10-draft"})
+	first, _ := reg["cleanup_credential"].(string)
+	if first == "" || first == reg["token"] {
+		t.Fatalf("registration from an installed app: no separate cleanup credential: %v", reg)
+	}
+	if b := expect(t, status(first), 200); b["deleted"] != false {
+		t.Fatalf("status of a live account: %v", b)
+	}
+	if r := status("made-up"); r.Status != 404 {
+		t.Fatalf("unknown credential: %d", r.Status)
+	}
+	if r := ack(first); r.Status != 404 {
+		t.Fatalf("ack before any deletion: %d", r.Status)
+	}
+
+	// A new login on the same installation replaces the device's credential.
+	login := auth("/auth/login", nil)
+	second := login["cleanup_credential"].(string)
+	if second == first || status(first).Status != 404 || status(second).Status != 200 {
+		t.Fatal("the device's earlier credential still works after a new login")
+	}
+	app := newClient(t, "desktop")
+	app.token = login["token"].(string)
+	uid := userID(t, app)
+	// A second installation has its own receipt; acknowledging this one leaves it.
+	loginApp(t, email, testPassword)
+
+	proof := expect(t, app.do("POST", "/auth/reauthenticate", map[string]any{"password": testPassword, "purpose": "delete_account"}, ""), 200)["proof"].(string)
+	expect(t, app.mutate("POST", "/me/account-deletion", map[string]any{"proof": proof, "confirmed": true}), http.StatusAccepted)
+
+	if b := expect(t, status(second), 200); b["deleted"] != true {
+		t.Fatalf("status after deletion: %v", b)
+	}
+	// It keeps answering after the user row is gone (offline devices come back later).
+	waitFor(t, "user row deleted", 30*time.Second, func() bool {
+		var n int
+		_ = deps.Pool.QueryRow(context.Background(), `SELECT count(*) FROM users WHERE id = $1`, uid).Scan(&n)
+		return n == 0
+	})
+	if b := expect(t, status(second), 200); b["deleted"] != true {
+		t.Fatalf("status after the user row is gone: %v", b)
+	}
+	if r := ack(second); r.Status != http.StatusNoContent {
+		t.Fatalf("ack: %d %s", r.Status, r.Raw)
+	}
+	if r := ack(second); r.Status != http.StatusNoContent {
+		t.Fatalf("a repeated ack must succeed too: %d", r.Status)
+	}
+	var acked int
+	_ = deps.Pool.QueryRow(context.Background(), `SELECT count(*) FROM device_cleanup_receipts WHERE original_user_id = $1 AND acknowledged_at IS NOT NULL`, uid).Scan(&acked)
+	if acked != 1 {
+		t.Fatalf("acknowledged receipts: %d, want only this device's", acked)
+	}
+}
+
+// The web never gets a cleanup credential: it stores nothing to clean (R-WEB).
+func TestNoCleanupCredentialOnTheWeb(t *testing.T) {
+	resetRateLimits(t)
+	r := newClient(t, "web").do("POST", "/auth/login", map[string]any{"email": owner, "password": "saltwater-hymn"}, "")
+	if r.Status != 200 {
+		r = newClient(t, "web").do("POST", "/auth/register", map[string]any{"email": owner, "password": "saltwater-hymn", "accepted_terms": true, "terms_version": "2026-10-draft"}, "")
+	}
+	if r.Status/100 != 2 {
+		t.Fatalf("web sign-in: %d %s", r.Status, r.Raw)
+	}
+	if _, ok := r.Body["cleanup_credential"]; ok {
+		t.Fatal("the web got a cleanup credential")
+	}
 }

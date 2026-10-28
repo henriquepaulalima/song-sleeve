@@ -69,19 +69,31 @@ type state struct {
 	InstallationID string            `json:"installation_id"`
 	AccountID      string            `json:"account_id,omitempty"`
 	Known          map[string]string `json:"known_accounts,omitempty"` // account ID → email, for folder checks
+	// Purges are deleted accounts being erased from this device (purge_pending,
+	// §7.11): ID → email. Each stays until its namespace is gone and the server
+	// acknowledged it.
+	Purges map[string]string `json:"purges,omitempty"`
 }
 
 type Shell struct {
 	cfg    Config
 	client *api.Client
-	creds  *creds.Store
-	media  *mediaServer
+	// cleanup asks about account deletions with the cleanup credential alone,
+	// never with a session token, whichever account it's about.
+	cleanup *api.Client
+	creds   *creds.Store
+	media   *mediaServer
 
 	mu   sync.Mutex
 	st   state
 	acct *account
 
 	online atomic.Bool
+
+	// life ends at Shutdown; background work that isn't tied to one account
+	// (deletion sweeps) runs under it.
+	life    context.Context
+	endLife context.CancelFunc
 }
 
 type account struct {
@@ -140,7 +152,8 @@ func New(cfg Config) (*Shell, error) {
 	if cfg.FileCredentials {
 		store = creds.NewFile(cfg.DataDir)
 	}
-	s := &Shell{cfg: cfg, client: api.New(cfg.APIBase, "desktop", cfg.Version), creds: store}
+	s := &Shell{cfg: cfg, client: api.New(cfg.APIBase, "desktop", cfg.Version), cleanup: api.New(cfg.APIBase, "desktop", cfg.Version), creds: store}
+	s.life, s.endLife = context.WithCancel(context.Background())
 	if err := s.loadState(); err != nil {
 		return nil, err
 	}
@@ -185,10 +198,13 @@ func (s *Shell) emit(name string, data any) { s.cfg.Hooks.Emit(name, data) }
 // Restore signs the remembered account back in on startup. It works offline: the
 // account's last known profile and its replica are local (R-PLAY-1).
 func (s *Shell) Restore(ctx context.Context) {
+	// Deletions made elsewhere, and purges a quit interrupted (§7.9 step 1).
+	go s.runSweeps(s.life)
 	s.mu.Lock()
 	id := s.st.AccountID
+	_, purging := s.st.Purges[id]
 	s.mu.Unlock()
-	if id == "" {
+	if id == "" || purging {
 		return
 	}
 	token, err := s.creds.Get(id)
@@ -220,10 +236,11 @@ func (s *Shell) accountDir(id string) string {
 
 // signedIn stores the token and starts the account's services after a login or a
 // registration through the proxy.
-func (s *Shell) signedIn(me api.Me, token string) error {
+func (s *Shell) signedIn(me api.Me, token, cleanup string) error {
 	if err := s.creds.Set(me.ID, token); err != nil {
 		return err
 	}
+	s.saveCleanup(me.ID, cleanup)
 	s.mu.Lock()
 	cur := s.acct
 	s.mu.Unlock()
@@ -344,7 +361,12 @@ func (s *Shell) SignOut(ctx context.Context, remove bool) error {
 		_ = s.client.Do(rctx, "POST", "/auth/logout", nil, nil)
 		cancel()
 	}
-	return s.dropSession(remove)
+	err := s.dropSession(remove)
+	if remove && a != nil {
+		// Nothing is left here to clean up later.
+		_ = s.creds.Delete(cleanupKey(a.id))
+	}
+	return err
 }
 
 // dropSession forgets the token and stops the account without calling the server
@@ -375,6 +397,7 @@ func (s *Shell) current() *account {
 
 // Shutdown stops everything when the app quits; running uploads resume later.
 func (s *Shell) Shutdown() {
+	s.endLife()
 	_ = s.stopAccount(false)
 	s.media.close()
 }
@@ -406,10 +429,10 @@ func (s *Shell) reconciler(ctx context.Context, a *account) {
 		case errors.Is(err, api.ErrConnection):
 			s.setOnline(false)
 		case api.Code(err) == "unauthenticated":
-			go s.dropSession(false)
+			go s.sessionEnded(a.id)
 			return
 		case api.Code(err) == "account_deleted":
-			go s.dropSession(true)
+			go s.purgeAccount(context.Background(), a.id)
 			return
 		default:
 			slog.Warn("reconcile", "err", err)
@@ -439,7 +462,7 @@ func (s *Shell) listen(ctx context.Context, a *account) {
 					s.emit("progress", map[string]any{"id": p.TrackID, "confirmed": p.Confirmed, "total": p.Declared})
 				}
 			case "account_deleted":
-				go s.dropSession(true)
+				go s.purgeAccount(context.Background(), a.id)
 			case "changes":
 				a.reconcileSoon()
 			}

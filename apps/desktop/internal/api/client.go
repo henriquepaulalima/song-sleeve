@@ -269,3 +269,19 @@ func (c *Client) Events(ctx context.Context, cursor int64, fn func(Event)) error
 	}
 	return sc.Err()
 }
+
+// DeletionStatus asks, with the restricted cleanup credential, whether the
+// account was deleted (§7.9 step 1). It needs no session: it still answers after
+// every session was revoked and the user row is gone.
+func (c *Client) DeletionStatus(ctx context.Context, credential string) (bool, error) {
+	var out struct {
+		Deleted bool `json:"deleted"`
+	}
+	err := c.Do(ctx, "POST", "/account-deletion/status", map[string]string{"credential": credential}, &out)
+	return out.Deleted, err
+}
+
+// DeletionAck tells the server this device finished purging the account (§7.11).
+func (c *Client) DeletionAck(ctx context.Context, credential string) error {
+	return c.Do(ctx, "POST", "/account-deletion/ack", map[string]string{"credential": credential}, nil)
+}

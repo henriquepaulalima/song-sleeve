@@ -47,6 +47,8 @@ type Me struct {
 type authResponse struct {
 	Account Me     `json:"account"`
 	Token   string `json:"token,omitempty"` // bearer transport only
+	// Bearer transport only: the restricted cleanup credential (§7.11).
+	CleanupCredential string `json:"cleanup_credential,omitempty"`
 }
 
 func (h *Handlers) loadMe(ctx context.Context, q db.Querier, userID, sessionID, deviceID uuid.UUID, transport string) (Me, error) {
@@ -66,7 +68,8 @@ func (h *Handlers) loadMe(ctx context.Context, q db.Querier, userID, sessionID, 
 	return m, nil
 }
 
-func (h *Handlers) respondAuth(c *gin.Context, status int, userID, sessionID, deviceID uuid.UUID, token string) {
+func (h *Handlers) respondAuth(c *gin.Context, status int, userID uuid.UUID, sess session) {
+	sessionID, deviceID, token := sess.id, sess.deviceID, sess.token
 	platform := httpx.Platform(c)
 	transport := "bearer"
 	if platform == "web" {
@@ -81,7 +84,7 @@ func (h *Handlers) respondAuth(c *gin.Context, status int, userID, sessionID, de
 	if transport == "cookie" {
 		setSessionCookie(c, h.d, token)
 	} else {
-		resp.Token = token
+		resp.Token, resp.CleanupCredential = token, sess.cleanup
 	}
 	c.JSON(status, resp)
 }
@@ -137,8 +140,7 @@ func (h *Handlers) Register(c *gin.Context) {
 		return
 	}
 	userID, _ := uuid.NewV7()
-	var sessionID, deviceID uuid.UUID
-	var token string
+	var sess session
 	err = db.InTx(ctx, h.d.Pool, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO users (id, email, password_hash, terms_accepted_at, terms_version, locale, cloud_sync_enabled, storage_quota_bytes)
@@ -153,14 +155,14 @@ func (h *Handlers) Register(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `INSERT INTO library_view_preferences (user_id) VALUES ($1)`, userID); err != nil {
 			return err
 		}
-		sessionID, deviceID, token, err = createSession(ctx, tx, h.d, userID, platform, req.Device, c.GetHeader("User-Agent"))
+		sess, err = createSession(ctx, tx, h.d, userID, platform, req.Device, c.GetHeader("User-Agent"))
 		return err
 	})
 	if err != nil {
 		httpx.Fail(c, err)
 		return
 	}
-	h.respondAuth(c, http.StatusCreated, userID, sessionID, deviceID, token)
+	h.respondAuth(c, http.StatusCreated, userID, sess)
 }
 
 type loginRequest struct {
@@ -211,8 +213,7 @@ func (h *Handlers) Login(c *gin.Context) {
 		httpx.Fail(c, apperr.New(apperr.WebAppUnavailable, "Song Sleeve on the web is coming soon. Download the app to get started."))
 		return
 	}
-	var sessionID, deviceID uuid.UUID
-	var token string
+	var sess session
 	err = db.InTx(ctx, h.d.Pool, func(tx pgx.Tx) error {
 		if rehash {
 			if newHash, err := HashPassword(req.Password); err == nil {
@@ -222,14 +223,14 @@ func (h *Handlers) Login(c *gin.Context) {
 			}
 		}
 		var err error
-		sessionID, deviceID, token, err = createSession(ctx, tx, h.d, userID, platform, req.Device, c.GetHeader("User-Agent"))
+		sess, err = createSession(ctx, tx, h.d, userID, platform, req.Device, c.GetHeader("User-Agent"))
 		return err
 	})
 	if err != nil {
 		httpx.Fail(c, err)
 		return
 	}
-	h.respondAuth(c, http.StatusOK, userID, sessionID, deviceID, token)
+	h.respondAuth(c, http.StatusOK, userID, sess)
 }
 
 func (h *Handlers) Logout(c *gin.Context) {
