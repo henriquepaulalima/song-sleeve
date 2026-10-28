@@ -326,6 +326,14 @@ func (d *Device) runSync(ctx context.Context, workID, songID string, w syncWork)
 		}
 	}
 
+	if d.cfg.SyncDelay > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(d.cfg.SyncDelay):
+		}
+	}
+
 	// Step 3: upload exactly those bytes.
 	if err := d.upload(ctx, songID, w, copyPath, s.ByteSize); err != nil {
 		if ctx.Err() != nil {
@@ -471,6 +479,63 @@ func putPart(ctx context.Context, url string, body []byte) (string, error) {
 
 // failServer cancels the server-side sync (so every device drops the pending
 // track at once) and returns the song to local with the given state.
+// SuspendSyncs ends this device's syncs before its session ends (§7.12, F-24): the
+// workers stop, and every sync the server already knows is cancelled there, so
+// other devices drop it now instead of at the stall timeout. With requeue (plain
+// Log out, account switch) those songs go back to queued and start over at the next
+// login; without it (Log out and remove) the namespace is about to go. Offline, the
+// server fails them by stall (R-ID-4). Uploaded syncs are left to publish.
+func (d *Device) SuspendSyncs(ctx context.Context, requeue bool) {
+	d.Stop()
+	type item struct {
+		workID, songID string
+		w              syncWork
+	}
+	var items []item
+	rows, err := d.db.QueryContext(ctx, `SELECT id, subject_id, payload FROM pending_work WHERE kind = 'sync'`)
+	if err != nil {
+		return
+	}
+	for rows.Next() {
+		var it item
+		var raw string
+		if rows.Scan(&it.workID, &it.songID, &raw) == nil && json.Unmarshal([]byte(raw), &it.w) == nil {
+			items = append(items, it)
+		}
+	}
+	rows.Close()
+	for _, it := range items {
+		if it.w.TrackID == "" || it.w.Uploaded {
+			continue
+		}
+		err := d.api.Mutate(ctx, "DELETE", "/me/tracks/"+it.w.TrackID+"?reason=cancel_pending", "", nil, nil)
+		switch {
+		case err == nil, api.Code(err) == "not_found":
+			// Cancelled now, or already gone (failed by stall or elsewhere).
+		case api.Code(err) == "operation_not_active":
+			// It finished uploading and was published: syncing it again would
+			// make a second copy. The next login's catch-up completes it.
+			continue
+		default:
+			continue // unreachable: the stall fails it, and the next login sees that
+		}
+		if !requeue {
+			continue
+		}
+		if it.w.CopyName != "" {
+			_ = d.dir.RemoveSyncCopy(it.w.CopyName)
+		}
+		// A fresh start: the cancelled request must not be recovered (R-MUT-3).
+		raw, _ := json.Marshal(syncWork{RequestID: uuid.NewString()})
+		_, _ = d.db.ExecContext(ctx, `UPDATE pending_work SET state = 'queued', payload = ? WHERE id = ?`, string(raw), it.workID)
+		_, _ = d.db.ExecContext(ctx, `UPDATE local_songs SET sync_state = 'queued', sync_failure = NULL, syncing_track_id = NULL WHERE id = ?`, it.songID)
+	}
+	if requeue {
+		_, _ = d.db.ExecContext(ctx, `UPDATE pending_work SET state = 'queued' WHERE kind = 'sync' AND state = 'running'`)
+	}
+	d.lis.LocalSongsChanged()
+}
+
 func (d *Device) failServer(ctx context.Context, songID, workID string, w syncWork, state, reason string) {
 	if w.TrackID != "" {
 		_ = d.api.Mutate(ctx, "DELETE", "/me/tracks/"+w.TrackID+"?reason=cancel_pending", "", nil, nil)

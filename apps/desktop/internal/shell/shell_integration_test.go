@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/henriquepaulalima/song-sleeve/desktop/internal/songsdir"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/testserver"
 )
 
@@ -65,11 +66,21 @@ type app struct {
 
 func newApp(t *testing.T, root, apiBase string) *app {
 	t.Helper()
+	return newAppWith(t, root, apiBase, nil)
+}
+
+// newAppWith lets a test adjust the shell's Config first.
+func newAppWith(t *testing.T, root, apiBase string, adjust func(*Config)) *app {
+	t.Helper()
 	ev := &events{}
-	sh, err := New(Config{
+	cfg := Config{
 		APIBase: apiBase, Version: "0.1.0", DataDir: filepath.Join(root, "data"), SleeveRoot: filepath.Join(root, "Song Sleeve"),
 		DeviceLabel: "Test PC", FileCredentials: true, Hooks: Hooks{Emit: ev.emit, Open: func(string) error { return nil }},
-	})
+	}
+	if adjust != nil {
+		adjust(&cfg)
+	}
+	sh, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,6 +180,21 @@ func (a *app) register(email string) {
 	a.must("POST", "/api/auth/register", body, &auth)
 	if _, ok := auth["token"]; ok {
 		a.t.Fatal("the token reached the webview")
+	}
+}
+
+// signIn logs in, registering the account first if no earlier test did.
+// Registrations are rate-limited per IP (10 an hour), so logging in comes first.
+func (a *app) signIn(email string) {
+	a.t.Helper()
+	login := map[string]any{"email": email, "password": "saltwater-hymn"}
+	code, _ := a.call("POST", "/api/auth/login", login, nil)
+	switch code {
+	case 200:
+	case 401:
+		a.register(email)
+	default:
+		a.t.Fatalf("POST /api/auth/login: %d", code)
 	}
 }
 
@@ -402,4 +428,132 @@ func TestSyncThroughTheShell(t *testing.T) {
 	if check["caught_up"] != true {
 		t.Fatalf("folder check: %+v", check)
 	}
+}
+
+// A song deleted by hand while the app runs comes back, and a file added by hand
+// goes, without waiting for the next periodic check (§7.13, M4 exit tests).
+func TestFolderWatcherRestoresHandEdits(t *testing.T) {
+	a := newApp(t, t.TempDir(), baseURL)
+	a.signIn(cloudUser)
+	ids := a.importSongs("Watched")
+	a.must("POST", "/local/sync", map[string]any{"ids": ids}, nil)
+	var synced *catalogTrack
+	waitFor(t, "the synced track", func() bool {
+		for _, tr := range a.catalog().Tracks {
+			if !tr.Device.Local && tr.State == "ready" && tr.Device.Downloaded && tr.Name == "Watched" {
+				synced = &tr
+				return true
+			}
+		}
+		return false
+	})
+	folder := a.state().Folder["account"]
+	songFiles := func() map[string]int64 {
+		out := map[string]int64{}
+		entries, _ := os.ReadDir(folder)
+		for _, e := range entries {
+			if fi, err := e.Info(); err == nil && !strings.HasPrefix(e.Name(), ".") {
+				out[e.Name()] = fi.Size()
+			}
+		}
+		return out
+	}
+	var name string
+	for n, size := range songFiles() {
+		if size == synced.ByteSize {
+			name = n
+		}
+	}
+	if name == "" {
+		t.Fatalf("no mirror of the synced song in %v", songFiles())
+	}
+
+	if err := os.Remove(filepath.Join(folder, name)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "dropped-in.mp3"), []byte("not a synced song"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the watcher's check to restore the song and remove the extra file", func() bool {
+		files := songFiles()
+		_, extra := files["dropped-in.mp3"]
+		return files[name] == synced.ByteSize && !extra
+	})
+
+	// The same while the song is loaded in the player (pinned, even paused): its
+	// file comes back at once, so playback can go on.
+	a.must("POST", "/local/play", map[string]any{"track_id": synced.ID}, nil)
+	if err := os.Remove(filepath.Join(folder, name)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the playing song's file to come back while it's still loaded", func() bool {
+		return songFiles()[name] == synced.ByteSize
+	})
+	a.must("POST", "/local/play", map[string]any{"track_id": nil}, nil)
+
+	// The check's own manifest writes must not start another check, forever.
+	manifest := filepath.Join(folder, songsdir.ManifestName)
+	time.Sleep(watchDelay + 2*time.Second)
+	before, err := os.Stat(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(watchDelay + 2*time.Second)
+	after, _ := os.Stat(manifest)
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Fatal("the manifest keeps being rewritten: the watcher reacts to its own check")
+	}
+}
+
+// Log out in the middle of a sync, through the shell as the UI does it (§7.12,
+// F-24): another device drops the syncing song at once instead of after the
+// 5-minute stall, and at the next login the song is queued again and syncs.
+func TestLogoutMidSyncThroughTheShell(t *testing.T) {
+	const name = "Caught Mid-Sync"
+	// Every sync waits before uploading, so the logout lands mid-sync.
+	a := newAppWith(t, t.TempDir(), baseURL, func(c *Config) { c.SyncDelay = 15 * time.Second })
+	a.signIn(cloudUser)
+	other := newApp(t, t.TempDir(), baseURL)
+	other.signIn(cloudUser)
+	syncing := func(x *app) bool {
+		for _, tr := range x.catalog().Tracks {
+			if tr.Name == name && !tr.Device.Local && tr.State == "pending_upload" {
+				return true
+			}
+		}
+		return false
+	}
+
+	ids := a.importSongs(name)
+	a.must("POST", "/local/sync", map[string]any{"ids": ids}, nil)
+	waitFor(t, "the other device to show the song syncing", func() bool { return syncing(other) })
+
+	a.must("POST", "/local/logout", map[string]any{"remove": false}, nil)
+	end := time.Now().Add(5 * time.Second)
+	for syncing(other) {
+		if time.Now().After(end) {
+			t.Fatal("the other device still shows the song syncing after the logout")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	// Log in again: the song is back in this device's queue and syncs.
+	a.signIn(cloudUser)
+	var queued bool
+	for _, tr := range a.catalog().Tracks {
+		if tr.Name == name && tr.Device.Local {
+			queued = tr.Device.SyncState == "queued" || tr.Device.SyncState == "syncing"
+		}
+	}
+	if !queued {
+		t.Fatalf("after logging in again the song isn't queued: %+v", a.catalog().Tracks)
+	}
+	waitFor(t, "the song to sync after logging in again", func() bool {
+		for _, tr := range other.catalog().Tracks {
+			if tr.Name == name && tr.State == "ready" {
+				return true
+			}
+		}
+		return false
+	})
 }

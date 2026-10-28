@@ -277,3 +277,15 @@ func TestNamesAndPurge(t *testing.T) {
 		t.Fatal("purge removed the whole Song Sleeve folder")
 	}
 }
+
+// The playing song's file deleted by hand: nothing to protect, so it is downloaded
+// again right away instead of waiting for playback to end.
+func TestMissingPinnedFileIsDownloadedAgain(t *testing.T) {
+	f := setup(t)
+	a := f.install("a")
+	os.Remove(f.d.Path(a.FileName))
+	r := f.check([]Expected{a}, CheckOptions{Mode: Quick, CaughtUp: true, Pinned: map[string]bool{a.FileName: true}})
+	if len(r.NeedsDownload) != 1 || r.NeedsDownload[0].ContentID != "a" {
+		t.Fatalf("the missing playing file isn't downloaded again: %+v", r)
+	}
+}

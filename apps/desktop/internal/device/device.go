@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/accountdb"
 	"github.com/henriquepaulalima/song-sleeve/desktop/internal/api"
@@ -49,6 +50,10 @@ type Config struct {
 	Workers             int // sync workers (R-CLOUD-9), 3 by default
 	TempDir             string
 	OtherAccountFolders []string
+	// SyncDelay holds each sync just before its upload, after the track document
+	// exists. Development only (SONG_SLEEVE_DEV_SYNC_DELAY in dev builds), to try
+	// what happens mid-sync on a fast local network.
+	SyncDelay time.Duration
 }
 
 type Device struct {
@@ -467,7 +472,7 @@ func (d *Device) downloadMissing(ctx context.Context, list []songsdir.Expected) 
 			d.markNeedsDownload(ctx, []songsdir.Expected{e}, "download_failed")
 			continue
 		}
-		if d.pinned(t.ID) {
+		if d.pinned(t.ID) && d.playingFileExists(ctx, t.ID) {
 			// Staged; installed atomically when the pin is released (R-PIN-3).
 			_, _ = d.db.ExecContext(ctx, `UPDATE synced_files SET readiness = 'pending_apply', staged_content_id = ?, staged_path = ? WHERE track_id = ?`, e.ContentID, tmp, t.ID)
 			continue
@@ -484,6 +489,18 @@ func (d *Device) downloadMissing(ctx context.Context, list []songsdir.Expected) 
 		d.lis.FolderChanged()
 	}
 	return n
+}
+
+// playingFileExists reports whether the pinned track's file is still on disk. If
+// it was deleted by hand there's nothing to protect, so its download installs at
+// once and playback can go on.
+func (d *Device) playingFileExists(ctx context.Context, trackID string) bool {
+	var name sql.NullString
+	if err := d.db.QueryRowContext(ctx, `SELECT file_name FROM synced_files WHERE track_id = ?`, trackID).Scan(&name); err != nil || !name.Valid {
+		return false
+	}
+	_, err := os.Stat(d.dir.Path(name.String))
+	return err == nil
 }
 
 func (d *Device) download(ctx context.Context, e songsdir.Expected) (string, error) {

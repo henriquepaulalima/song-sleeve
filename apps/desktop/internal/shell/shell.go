@@ -60,6 +60,8 @@ type Config struct {
 	// FileCredentials keeps the token in a private file instead of the OS
 	// credential store (tests; SONG_SLEEVE_FILE_CREDENTIALS=1).
 	FileCredentials bool
+	// SyncDelay: see device.Config. Development builds only.
+	SyncDelay time.Duration
 }
 
 // state is the small file that remembers who was signed in.
@@ -222,17 +224,23 @@ func (s *Shell) signedIn(me api.Me, token string) error {
 	if err := s.creds.Set(me.ID, token); err != nil {
 		return err
 	}
-	s.client.SetToken(token)
 	s.mu.Lock()
 	cur := s.acct
 	s.mu.Unlock()
-	if cur != nil && cur.id == me.ID {
+	if cur != nil && cur.id != me.ID {
+		// An account switch: cancel the old account's syncs with its own token
+		// first (§7.12), then stop it.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cur.dev.SuspendSyncs(ctx, true)
+		cancel()
+		s.stopAccount(false)
+		cur = nil
+	}
+	s.client.SetToken(token)
+	if cur != nil {
 		cur.setMe(me)
 		s.saveMe(cur)
 		return nil
-	}
-	if cur != nil {
-		s.stopAccount(false)
 	}
 	return s.startAccount(me)
 }
@@ -269,15 +277,17 @@ func (s *Shell) startAccount(me api.Me) error {
 	a.dev = device.New(device.Config{
 		DB: db, Library: lib, Dir: songs, API: s.client, Me: a.Me,
 		Listener: &listener{s: s, a: a}, TempDir: filepath.Join(dir, "tmp"), OtherAccountFolders: others,
+		SyncDelay: s.cfg.SyncDelay,
 	})
 	s.saveMe(a)
 	s.mu.Lock()
 	s.acct = a
 	s.mu.Unlock()
 	a.dev.Start(ctx)
-	a.done.Add(2)
+	a.done.Add(3)
 	go s.reconciler(ctx, a)
 	go s.listen(ctx, a)
+	go s.watchFolder(ctx, a)
 	go func() {
 		// Local health on open (§7.6): sources moved or changed since last time.
 		if changed, err := lib.CheckHealth(ctx, false); err == nil && len(changed) > 0 {
@@ -326,6 +336,10 @@ func (s *Shell) SignOut(ctx context.Context, remove bool) error {
 	a := s.acct
 	s.mu.Unlock()
 	if a != nil && s.client.Token() != "" {
+		// Cancel this device's syncs on the server while the session still works.
+		sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		a.dev.SuspendSyncs(sctx, !remove)
+		cancel()
 		rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		_ = s.client.Do(rctx, "POST", "/auth/logout", nil, nil)
 		cancel()

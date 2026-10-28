@@ -381,13 +381,15 @@ func (d *Dir) Check(ctx context.Context, expected []Expected, opt CheckOptions) 
 			return nil, err
 		}
 		e := want[name]
-		if opt.Pinned[name] {
+		f, present := files[name]
+		if opt.Pinned[name] && present {
 			if k, ok := known[name]; ok {
 				verified = append(verified, k)
 			}
 			continue // fixed when its pin is released
 		}
-		f, present := files[name]
+		// A pinned file that's gone is downloaded again: same content, nothing to
+		// replace under the player.
 		if present && !f.dir {
 			ok := false
 			if k, inManifest := known[name]; mode == Quick && inManifest && k.Size == f.size && k.SHA256 == e.SHA256 && f.size == e.Size {

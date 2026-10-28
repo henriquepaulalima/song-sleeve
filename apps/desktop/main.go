@@ -115,6 +115,7 @@ func main() {
 		SleeveRoot: sleeveRoot(),
 		// For development without a keyring daemon.
 		FileCredentials: os.Getenv("SONG_SLEEVE_FILE_CREDENTIALS") == "1",
+		SyncDelay:       devSyncDelay(),
 		Hooks: shell.Hooks{
 			Emit: func(name string, data any) {
 				if appCtx != nil {

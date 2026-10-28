@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -371,3 +372,134 @@ func TestAutoSyncScope(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// startedSync puts a song in the state a worker leaves it in mid-upload: the track
+// document exists on the server, its copy is in Songs, the work is running.
+func (in *install) startedSync(s library.Song) (workID, trackID, copyName string) {
+	in.t.Helper()
+	if n, _ := in.dev.QueueSync(in.ctx, []string{s.ID}); n != 1 {
+		in.t.Fatal("queue")
+	}
+	var raw string
+	if err := in.db.QueryRowContext(in.ctx, `SELECT id, payload FROM pending_work WHERE kind = 'sync' AND subject_id = ?`, s.ID).Scan(&workID, &raw); err != nil {
+		in.t.Fatal(err)
+	}
+	var w syncWork
+	json.Unmarshal([]byte(raw), &w)
+	var resp createTrackResp
+	body := map[string]any{"name": s.Name, "duration_ms": s.DurationMs, "byte_size": s.ByteSize, "format": s.Format, "sha256": s.SHA256}
+	if err := in.api.Mutate(in.ctx, "POST", "/me/tracks", w.RequestID, body, &resp); err != nil {
+		in.t.Fatal(err)
+	}
+	w.TrackID, w.OperationID = resp.Track.ID, resp.Operation.ID
+	w.CopyName = songsdir.SyncCopyName(resp.Track.ID, s.Format)
+	src, _ := os.ReadFile(s.SourcePath)
+	os.WriteFile(in.dir.Path(w.CopyName), src, 0o644)
+	b, _ := json.Marshal(w)
+	in.db.ExecContext(in.ctx, `UPDATE pending_work SET state = 'running', payload = ? WHERE id = ?`, string(b), workID)
+	in.db.ExecContext(in.ctx, `UPDATE local_songs SET sync_state = 'syncing', syncing_track_id = ? WHERE id = ?`, resp.Track.ID, s.ID)
+	return workID, resp.Track.ID, w.CopyName
+}
+
+func (in *install) serverHas(trackID string) bool {
+	in.t.Helper()
+	pages, err := in.api.Snapshot(in.ctx)
+	if err != nil {
+		in.t.Fatal(err)
+	}
+	for _, p := range pages {
+		for _, tr := range p.Tracks {
+			if tr.ID == trackID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Log out with a sync running (§7.12, F-24): cancelled on the server at once. Plain
+// Log out puts the song back to queued and syncs it from scratch at the next login;
+// Log out and remove doesn't keep it. One test, so the account signs in only once
+// (sign-ins are rate-limited).
+func TestLogoutCancelsRunningSyncs(t *testing.T) {
+	a := newInstall(t, syncUser)
+	a.dev.Stop() // the test drives the sync's state itself
+	s := a.importWAV("logout.wav", 1, 0x30, "")
+	workID, trackID, copyName := a.startedSync(s)
+	if !a.serverHas(trackID) {
+		t.Fatal("test setup: the track document should exist")
+	}
+
+	a.dev.SuspendSyncs(a.ctx, true)
+
+	if a.serverHas(trackID) {
+		t.Fatal("the sync is still on the server: other devices keep showing it until the stall")
+	}
+	got, _ := a.lib.Song(a.ctx, s.ID)
+	if got.SyncState != "queued" || got.SyncingTrackID != nil {
+		t.Fatalf("song after logout: %s %v", got.SyncState, got.SyncingTrackID)
+	}
+	var state, raw string
+	a.db.QueryRowContext(a.ctx, `SELECT state, payload FROM pending_work WHERE id = ?`, workID).Scan(&state, &raw)
+	var w syncWork
+	json.Unmarshal([]byte(raw), &w)
+	if state != "queued" || w.TrackID != "" || w.RequestID == "" {
+		t.Fatalf("work after logout: %s %+v", state, w)
+	}
+	if _, err := os.Stat(a.dir.Path(copyName)); !os.IsNotExist(err) {
+		t.Fatal("the cancelled sync copy is still in Songs")
+	}
+
+	// "Log in again": a new service over the same database starts it over.
+	dev2 := New(Config{DB: a.db, Library: a.lib, Dir: a.dir, API: a.api, Me: func() *api.Me { return a.me }, TempDir: t.TempDir()})
+	dev2.Start(a.ctx)
+	defer dev2.Stop()
+	a.dev = dev2
+	a.waitFor("the song synced after logging in again", func() bool {
+		_, err := a.lib.Song(a.ctx, s.ID)
+		return err == library.ErrNotFound
+	})
+	dev2.Stop()
+
+	// The upload finished and the song was published just before the logout,
+	// before this device noted it (the server answers operation_not_active): it
+	// must not be queued again, or the next login uploads a second copy.
+	var published string
+	pages, err := a.api.Snapshot(a.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range pages {
+		for _, tr := range p.Tracks {
+			if tr.Name == "logout" && tr.State == "ready" {
+				published = tr.ID
+			}
+		}
+	}
+	if published == "" {
+		t.Fatal("test setup: no published track named logout")
+	}
+	s3 := a.importWAV("published.wav", 1, 0x32, "")
+	work3, _, _ := a.startedSync(s3)
+	a.db.ExecContext(a.ctx, `UPDATE pending_work SET payload = json_set(payload, '$.track_id', ?) WHERE id = ?`, published, work3)
+	a.db.ExecContext(a.ctx, `UPDATE local_songs SET syncing_track_id = ? WHERE id = ?`, published, s3.ID)
+	dev2.SuspendSyncs(a.ctx, true)
+	var payload3 string
+	a.db.QueryRowContext(a.ctx, `SELECT payload FROM pending_work WHERE id = ?`, work3).Scan(&payload3)
+	var w3 syncWork
+	json.Unmarshal([]byte(payload3), &w3)
+	if got, _ := a.lib.Song(a.ctx, s3.ID); got.SyncState == "queued" || w3.TrackID != published {
+		t.Fatalf("a published sync was queued again: %s %+v", got.SyncState, w3)
+	}
+
+	// Log out and remove: cancelled on the server, not requeued.
+	s2 := a.importWAV("remove.wav", 1, 0x31, "")
+	_, trackID2, _ := a.startedSync(s2)
+	dev2.SuspendSyncs(a.ctx, false)
+	if a.serverHas(trackID2) {
+		t.Fatal("the removed account's sync is still on the server")
+	}
+	if got, _ := a.lib.Song(a.ctx, s2.ID); got.SyncState == "queued" {
+		t.Fatal("a removed account's sync was requeued")
+	}
+}

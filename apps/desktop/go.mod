@@ -43,6 +43,7 @@ require (
 
 require (
 	fyne.io/systray v1.12.2
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/henriquepaulalima/song-sleeve/server v0.0.0
